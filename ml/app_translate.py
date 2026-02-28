@@ -16,7 +16,7 @@ translate_image = (
 # Notice we are attaching a Modal Secret to securely inject the OpenAI API key.
 @app.function(
     image=translate_image, 
-    secrets=[modal.Secret.from_name("openai-api-secret")] 
+    secrets=[modal.Secret.from_name("openai-secret")]
 )
 def translate_text(segments: list, target_language: str, glossary: dict = None):
     from openai import OpenAI
