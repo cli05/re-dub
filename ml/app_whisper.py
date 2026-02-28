@@ -52,7 +52,14 @@ def transcribe_video(job_id: str):
     print("Transcription complete.")
     return {
         "text": result["text"],
-        "segments": result["segments"]
+        "segments": [
+            {
+                "start": float(seg["start"]),
+                "end": float(seg["end"]),
+                "text": seg["text"]
+            }
+            for seg in result["segments"]
+        ]
     }
 
 # 5. Local Testing Entrypoint
