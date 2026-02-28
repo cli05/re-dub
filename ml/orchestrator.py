@@ -20,8 +20,8 @@ orchestrator_image = (
 @app.function(
     image=orchestrator_image,
     secrets=[
-        modal.Secret.from_name("do-spaces-secret"),      # Boto3 S3 credentials
-        modal.Secret.from_name("backend-webhook-secret") # Webhook API key
+        modal.Secret.from_name("redub-r2-secret"),       # R2 credentials
+        modal.Secret.from_name("backend-webhook-secret")  # Webhook API key
     ],
     timeout=1800,  # 30 minutes to account for the entire pipeline
     volumes={"/pipeline": pipeline_vol}
@@ -85,27 +85,25 @@ def process_video(job_id: str, video_url: str, target_language: str):
     latentsync_func = modal.Function.from_name("redub-latentsync", "sync_lip_movements")
     final_video_bytes = latentsync_func.remote(job_id)
 
-    # Step E: Upload to Digital Ocean Spaces / Cloudflare R2
-    print("5. Uploading to Storage...")
+    # Step E: Upload to Cloudflare R2
+    print("5. Uploading to R2...")
     s3_client = boto3.client(
         's3',
-        endpoint_url=os.environ["S3_ENDPOINT_URL"],
-        aws_access_key_id=os.environ["S3_ACCESS_KEY"],
-        aws_secret_access_key=os.environ["S3_SECRET_KEY"]
+        endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+        region_name="auto",
     )
 
-    bucket_name = os.environ["S3_BUCKET_NAME"]
-    file_key = f"dubbed_videos/{job_id}_{target_language}.mp4"
+    bucket_name = os.environ["R2_BUCKET_NAME"]
+    output_key = f"projects/{job_id}/dubbed_output.mp4"
 
     s3_client.put_object(
         Bucket=bucket_name,
-        Key=file_key,
+        Key=output_key,
         Body=final_video_bytes,
         ContentType='video/mp4',
-        ACL='public-read'  # Make it accessible to the React frontend
     )
-
-    final_video_url = f"{os.environ['S3_ENDPOINT_URL'].replace('https://', f'https://{bucket_name}.')}/{file_key}"
 
     # Step F: Fire Webhook to FastAPI
     print("6. Notifying FastAPI backend...")
@@ -114,14 +112,14 @@ def process_video(job_id: str, video_url: str, target_language: str):
     payload = {
         "job_id": job_id,
         "status": "COMPLETED",
-        "result_url": final_video_url
+        "output_key": output_key,
     }
 
     response = requests.post(webhook_url, json=payload, headers=headers)
     response.raise_for_status()
 
     print("--- Pipeline Complete ---")
-    return {"status": "success", "url": final_video_url}
+    return {"status": "success", "output_key": output_key}
 
 # 5. Local Testing Entrypoint
 @app.local_entrypoint()
