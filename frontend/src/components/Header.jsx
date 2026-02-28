@@ -1,8 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getUser, logout } from '../auth';
 
 export default function Header({ hideSearch = false }) {
   const navigate = useNavigate();
+  const user = getUser();
+  const initials = user
+    ? user.display_name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
+    : "?";
+
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -41,7 +47,7 @@ export default function Header({ hideSearch = false }) {
         </button>
         <div style={styles.avatarWrap} ref={dropdownRef}>
           <div style={styles.avatar} onClick={() => setDropdownOpen(v => !v)}>
-            <img src="https://i.pravatar.cc/32?img=5" alt="avatar" style={{ width: 32, height: 32, borderRadius: "50%" }} />
+            <div style={styles.avatarCircle}>{initials}</div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M6 9l6 6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round"/>
             </svg>
@@ -56,7 +62,7 @@ export default function Header({ hideSearch = false }) {
               </button>
               <button
                 style={{ ...styles.dropdownItem, ...styles.dropdownItemLogout }}
-                onClick={() => { setDropdownOpen(false); navigate('/login'); }}
+                onClick={() => { logout(); navigate('/login'); }}
               >
                 Log Out
               </button>
@@ -142,6 +148,20 @@ const styles = {
     alignItems: "center",
     gap: 6,
     cursor: "pointer",
+  },
+  avatarCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    background: "rgba(0,229,160,0.15)",
+    border: "1px solid rgba(0,229,160,0.3)",
+    color: "#00e5a0",
+    fontSize: 12,
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    letterSpacing: "0.5px",
   },
   dropdown: {
     position: "absolute",
