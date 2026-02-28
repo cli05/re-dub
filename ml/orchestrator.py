@@ -84,10 +84,13 @@ def process_video(job_id: str, video_url: str, target_language: str):
         speaker_reference_bytes=speaker_ref_bytes
     )
 
-    # Step D: Visual Lip Sync (Wav2Lip)
-    print("4. Morphing video lips...")
-    wav2lip_func = modal.Function.from_name("redub-wav2lip", "sync_lip_movements")
-    final_video_bytes = wav2lip_func.remote(video_url, dubbed_audio_bytes)
+    # Step D: Visual Lip Sync (LatentSync)
+    print("4. Morphing video lips using Latent Diffusion...")
+    
+    # Notice we updated the app name here
+    latentsync_func = modal.Function.from_name("redub-latentsync", "sync_lip_movements") 
+    
+    final_video_bytes = latentsync_func.remote(video_url, dubbed_audio_bytes)
 
     # Step E: Upload to Digital Ocean Spaces / Cloudflare R2
     print("5. Uploading to Storage...")
