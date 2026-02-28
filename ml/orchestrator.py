@@ -128,7 +128,7 @@ def main(job_id: str = "test-123"):
     Run this locally using: modal run ml/orchestrator.py
     (Ensure the other 4 apps are deployed first using `modal deploy ml/app_*.py`)
     """
-    test_video_url = "https://www.w3schools.com/html/mov_bbb.mp4"
+    test_video_url = "tmp/test.mp4"
     target_lang = "es"  # ISO code for Spanish
 
     print("Triggering the grand orchestrator...")

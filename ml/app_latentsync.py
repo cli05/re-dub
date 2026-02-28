@@ -37,11 +37,41 @@ def sync_lip_movements(job_id: str):
     import subprocess
     import tempfile
 
-    LATENTSYNC_DIR = "/models/latentsync"
-    LATENTSYNC_SENTINEL = f"{LATENTSYNC_DIR}/checkpoints"
+    # LATENTSYNC_DIR = "/models/latentsync"
+    # LATENTSYNC_SENTINEL = f"{LATENTSYNC_DIR}/inference.py"
+    # CHECKPOINTS_DIR = f"{LATENTSYNC_DIR}/checkpoints"
 
-    if not os.path.exists(LATENTSYNC_SENTINEL):
+    # if not os.path.exists(LATENTSYNC_SENTINEL):
+    #     print("Cold start: cloning LatentSync repo and downloading checkpoints to volume...")
+    #     subprocess.run(
+    #         ["git", "clone", "https://github.com/bytedance/LatentSync.git", LATENTSYNC_DIR],
+    #         check=True
+    #     )
+    #     from huggingface_hub import snapshot_download
+    #     snapshot_download(
+    #         repo_id="ByteDance/LatentSync",
+    #         local_dir=LATENTSYNC_SENTINEL,
+    #         ignore_patterns=["*.md", ".git*"]
+    #     )
+    #     model_vol.commit()
+    #     print("LatentSync weights cached to volume.")
+
+    # source_video_path = f"/pipeline/{job_id}/source.mp4"
+    # dubbed_audio_path = f"/pipeline/{job_id}/dubbed_audio.wav"
+    # output_video_path = tempfile.mktemp(suffix=".mp4")
+
+    # print("Running LatentSync diffusion inference...")
+
+    LATENTSYNC_DIR = "/models/latentsync"
+    LATENTSYNC_SCRIPT = f"{LATENTSYNC_DIR}/scripts/inference.py"
+
+    if not os.path.exists(LATENTSYNC_SCRIPT):
         print("Cold start: cloning LatentSync repo and downloading checkpoints to volume...")
+        # Clean up any partial clone
+        if os.path.exists(LATENTSYNC_DIR):
+            import shutil
+            shutil.rmtree(LATENTSYNC_DIR)
+
         subprocess.run(
             ["git", "clone", "https://github.com/bytedance/LatentSync.git", LATENTSYNC_DIR],
             check=True
@@ -49,20 +79,27 @@ def sync_lip_movements(job_id: str):
         from huggingface_hub import snapshot_download
         snapshot_download(
             repo_id="ByteDance/LatentSync",
-            local_dir=LATENTSYNC_SENTINEL,
+            local_dir=f"{LATENTSYNC_DIR}/checkpoints",
             ignore_patterns=["*.md", ".git*"]
         )
         model_vol.commit()
         print("LatentSync weights cached to volume.")
+    else:
+        print("LatentSync repo and weights found on volume.")
 
     source_video_path = f"/pipeline/{job_id}/source.mp4"
     dubbed_audio_path = f"/pipeline/{job_id}/dubbed_audio.wav"
     output_video_path = tempfile.mktemp(suffix=".mp4")
 
+    # Verify inputs exist
+    for path, label in [(source_video_path, "source video"), (dubbed_audio_path, "dubbed audio")]:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"{label} not found at {path}")
+
     print("Running LatentSync diffusion inference...")
 
     command = [
-        "python", f"{LATENTSYNC_DIR}/inference.py",
+        "python", f"{LATENTSYNC_SCRIPT}",
         "--video_path", source_video_path,
         "--audio_path", dubbed_audio_path,
         "--video_out_path", output_video_path,
