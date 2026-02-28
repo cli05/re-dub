@@ -17,7 +17,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,7 +72,7 @@ async def register(req: RegisterRequest):
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     try:
-        user = create_user(
+        user = await create_user(
             email=req.email,
             password_hash=hash_password(req.password),
             display_name=req.display_name,
@@ -85,7 +85,7 @@ async def register(req: RegisterRequest):
 
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
-    user = get_user_by_email(req.email)
+    user = await get_user_by_email(req.email)
     if user is None or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_access_token(user["user_id"])
@@ -107,7 +107,7 @@ async def update_me(
         updates["display_name"] = req.display_name
     if req.preferences is not None:
         updates["preferences"] = req.preferences
-    updated = update_user(current_user["user_id"], **updates)
+    updated = await update_user(current_user["user_id"], **updates)
     return _safe_user(updated)
 
 
@@ -120,7 +120,7 @@ async def change_password(
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     if len(req.new_password) < 8:
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
-    update_user(current_user["user_id"], password_hash=hash_password(req.new_password))
+    await update_user(current_user["user_id"], password_hash=hash_password(req.new_password))
     return {"updated": True}
 
 
@@ -187,7 +187,7 @@ async def start_dub(
     current_user: dict = Depends(get_current_user),
 ):
     """Trigger the ML dubbing pipeline for a given video."""
-    job_id = create_job(
+    job_id = await create_job(
         user_id=current_user["user_id"],
         file_key=req.file_key,
         project_id=req.project_id,
@@ -202,7 +202,7 @@ async def get_dub_status(
     current_user: dict = Depends(get_current_user),
 ):
     """Poll the status of a dubbing job."""
-    job = get_job(job_id, current_user["user_id"])
+    job = await get_job(job_id, current_user["user_id"])
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     response = {"job_id": job_id, "status": job["status"]}
@@ -217,7 +217,7 @@ async def get_dub_status(
 @app.get("/api/projects")
 async def list_projects(current_user: dict = Depends(get_current_user)):
     """Return all dubbing jobs for the current user (used by the Dashboard)."""
-    jobs = list_jobs(current_user["user_id"])
+    jobs = await list_jobs(current_user["user_id"])
     return {"projects": jobs}
 
 
@@ -243,8 +243,8 @@ async def job_complete_webhook(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     if payload.status == "COMPLETED" and payload.output_key:
-        complete_job(payload.job_id, payload.output_key)
+        await complete_job(payload.job_id, payload.output_key)
     else:
-        fail_job(payload.job_id, payload.error or "Unknown error")
+        await fail_job(payload.job_id, payload.error or "Unknown error")
 
     return {"received": True}
