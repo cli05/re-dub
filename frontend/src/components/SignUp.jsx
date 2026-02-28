@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "./Header";
 
 export default function SignUp() {
+  const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,11 +22,7 @@ export default function SignUp() {
 
   function handleSubmit(evt) {
     evt.preventDefault();
-    const e = validate();
-    if (Object.keys(e).length) { setErrors(e); return; }
-    setErrors({});
-    setLoading(true);
-    setTimeout(() => setLoading(false), 1800);
+    navigate('/dashboard');
   }
 
   function inputStyle(id) {
@@ -186,7 +184,7 @@ export default function SignUp() {
           {/* Log in redirect */}
           <p style={s.loginRow}>
             Already have an account?{" "}
-            <a href="#" style={s.loginLink}>Log in</a>
+            <a href="#" style={s.loginLink} onClick={(e) => { e.preventDefault(); navigate('/login'); }}>Log in</a>
           </p>
         </div>
       </main>
