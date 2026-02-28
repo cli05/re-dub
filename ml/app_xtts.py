@@ -14,8 +14,9 @@ xtts_image = (
     .apt_install("ffmpeg")
     .pip_install(
         "TTS==0.22.0",  # Pinning the version for stability
-        "torch",
-        "torchaudio"
+        "transformers>=4.33.0,<4.40.0",  # TTS 0.22.0 is incompatible with transformers>=4.40
+        "torch<2.6.0",      # TTS 0.22.0 uses torch.load() without weights_only; PyTorch 2.6 changed the default to True, breaking checkpoint loading
+        "torchaudio<2.6.0"
     )
 )
 
