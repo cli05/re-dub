@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Header from "./Header";
+import { getUser, authFetch } from "../auth";
 
 const LANGUAGES = [
   "Spanish (Español)",
@@ -38,27 +39,83 @@ function Field({ label, children }) {
 }
 
 export default function AccountSettings() {
-  const [fullName, setFullName] = useState("Alex Rivera");
-  const [email, setEmail] = useState("alex.rivera@example.com");
-  const [currentPassword, setCurrentPassword] = useState("••••••••");
+  const storedUser = getUser();
+  const [fullName, setFullName] = useState(storedUser?.display_name ?? "");
+  const [email] = useState(storedUser?.email ?? "");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [language, setLanguage] = useState("Spanish (Español)");
+  const [language, setLanguage] = useState(
+    storedUser?.preferences?.preferred_language ?? "Spanish (Español)"
+  );
   const [saved, setSaved] = useState(false);
+  const [apiError, setApiError] = useState("");
   const [focusedField, setFocusedField] = useState(null);
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2200);
+  async function handleSave() {
+    setApiError("");
+
+    // Validate password fields if the user is trying to change password
+    if (newPassword) {
+      if (newPassword !== confirmPassword) {
+        setApiError("New passwords do not match.");
+        return;
+      }
+      if (!currentPassword) {
+        setApiError("Enter your current password to set a new one.");
+        return;
+      }
+    }
+
+    try {
+      // Update profile (display_name + preferred_language preference)
+      const profileRes = await authFetch("/api/auth/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          display_name: fullName,
+          preferences: { preferred_language: language },
+        }),
+      });
+      if (!profileRes.ok) {
+        const err = await profileRes.json();
+        throw new Error(err.detail || "Failed to save profile");
+      }
+      const updatedUser = await profileRes.json();
+      localStorage.setItem("auth_user", JSON.stringify(updatedUser));
+
+      // Change password if requested
+      if (newPassword) {
+        const pwRes = await authFetch("/api/auth/me/password", {
+          method: "POST",
+          body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword,
+          }),
+        });
+        if (!pwRes.ok) {
+          const err = await pwRes.json();
+          throw new Error(err.detail || "Failed to update password");
+        }
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2200);
+    } catch (err) {
+      setApiError(err.message);
+    }
   }
 
   function handleDiscard() {
-    setFullName("Alex Rivera");
-    setEmail("alex.rivera@example.com");
-    setCurrentPassword("••••••••");
+    const u = getUser();
+    setFullName(u?.display_name ?? "");
+    setLanguage(u?.preferences?.preferred_language ?? "Spanish (Español)");
+    setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
-    setLanguage("Spanish (Español)");
+    setApiError("");
   }
 
   const inputStyle = (id) => ({
@@ -102,10 +159,8 @@ export default function AccountSettings() {
             <Field label="Email Address">
               <input
                 value={email}
-                onChange={e => setEmail(e.target.value)}
-                onFocus={() => setFocusedField("email")}
-                onBlur={() => setFocusedField(null)}
-                style={inputStyle("email")}
+                readOnly
+                style={{ ...inputStyle("email"), opacity: 0.55, cursor: "default" }}
                 type="email"
               />
             </Field>
@@ -126,8 +181,8 @@ export default function AccountSettings() {
             <input
               value={currentPassword}
               onChange={e => setCurrentPassword(e.target.value)}
-              onFocus={() => { setFocusedField("curpw"); if (currentPassword === "••••••••") setCurrentPassword(""); }}
-              onBlur={() => { setFocusedField(null); if (currentPassword === "") setCurrentPassword("••••••••"); }}
+              onFocus={() => setFocusedField("curpw")}
+              onBlur={() => setFocusedField(null)}
               type="password"
               placeholder="Enter current password"
               style={{ ...inputStyle("curpw"), maxWidth: 280 }}
@@ -199,6 +254,7 @@ export default function AccountSettings() {
         </SectionCard>
 
         {/* Action buttons */}
+        {apiError && <p style={{ color: "#ff4d6d", fontSize: 12, textAlign: "right", margin: "0 0 8px" }}>{apiError}</p>}
         <div style={s.actions}>
           <button style={s.discardBtn} onClick={handleDiscard}>
             Discard Changes

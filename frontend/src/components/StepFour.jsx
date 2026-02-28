@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import Header from "./Header";
 import StepProgress from "./StepProgress";
 
@@ -70,6 +71,7 @@ function DetailRow({ label, value }) {
 }
 
 export default function NewDubStep4() {
+  const navigate = useNavigate();
   return (
     <div style={styles.app}>
       <Header />
@@ -168,13 +170,13 @@ export default function NewDubStep4() {
 
           {/* Nav */}
           <div style={styles.navRow}>
-            <button style={styles.backBtn}>
+            <button style={styles.backBtn} onClick={() => navigate('/new-dub/step-3')}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               Back
             </button>
-            <button style={styles.startBtn}>
+            <button style={styles.startBtn} onClick={() => navigate('/preview')}>
               Start Dubbing
             </button>
           </div>

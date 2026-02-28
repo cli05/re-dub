@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "./Header";
+import { register } from "../auth";
 
 export default function SignUp() {
+  const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,13 +21,20 @@ export default function SignUp() {
     return e;
   }
 
-  function handleSubmit(evt) {
+  async function handleSubmit(evt) {
     evt.preventDefault();
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
     setLoading(true);
-    setTimeout(() => setLoading(false), 1800);
+    try {
+      await register(email, password, fullName.trim());
+      navigate("/dashboard");
+    } catch (err) {
+      setErrors({ api: err.message });
+    } finally {
+      setLoading(false);
+    }
   }
 
   function inputStyle(id) {
@@ -153,7 +163,9 @@ export default function SignUp() {
                   <circle cx="12" cy="12" r="10" stroke="#ff4d6d" strokeWidth="2"/>
                   <path d="M12 8v4M12 16h.01" stroke="#ff4d6d" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
-                <span style={s.errorText}>Please fix the highlighted fields above.</span>
+                <span style={s.errorText}>
+                  {errors.api || "Please fix the highlighted fields above."}
+                </span>
               </div>
             )}
 
@@ -186,7 +198,7 @@ export default function SignUp() {
           {/* Log in redirect */}
           <p style={s.loginRow}>
             Already have an account?{" "}
-            <a href="#" style={s.loginLink}>Log in</a>
+            <a href="#" style={s.loginLink} onClick={(e) => { e.preventDefault(); navigate('/login'); }}>Log in</a>
           </p>
         </div>
       </main>

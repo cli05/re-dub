@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "./Header";
+import { login } from "../auth";
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -9,7 +12,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!email || !password) {
       setError("Please fill in all fields.");
@@ -17,7 +20,14 @@ export default function Login() {
     }
     setError("");
     setLoading(true);
-    setTimeout(() => setLoading(false), 1800);
+    try {
+      await login(email, password);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const inputStyle = (id) => ({
@@ -140,7 +150,7 @@ export default function Login() {
           {/* Sign up link */}
           <p style={s.signupRow}>
             Don't have an account?{" "}
-            <a href="#" style={s.signupLink}>Sign Up</a>
+            <a href="#" style={s.signupLink} onClick={(e) => { e.preventDefault(); navigate('/signup'); }}>Sign Up</a>
           </p>
         </div>
       </main>

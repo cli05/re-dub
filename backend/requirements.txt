@@ -4,3 +4,8 @@ boto3
 python-dotenv
 python-multipart
 modal
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt<4.0.0
+email-validator
+httpx
