@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 // ── Keyframe injection ──────────────────────────────────────────────────────
 const CSS = `
@@ -74,6 +75,7 @@ function Waveform({ count = 48, height = 80 }) {
 // ── Landing page ──────────────────────────────────────────────────────────
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div style={s.root}>
@@ -82,7 +84,7 @@ export default function LandingPage() {
       {/* ── NAV ─────────────────────────────────────────── */}
       <nav style={s.nav}>
         {/* Logo */}
-        <div style={s.navLogo}>
+        <div style={s.navLogo} onClick={() => navigate('/dashboard')}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
             <path d="M3 5h12M9 3v2m4.5 13c0 2.485-2.015 4.5-4.5 4.5S4.5 20.485 4.5 18c0-2.484 2.015-4.5 4.5-4.5s4.5 2.016 4.5 4.5z" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
             <path d="M15 5c0 4-3 7-3 7m5-7c2 3 2 7 2 7" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
@@ -93,8 +95,8 @@ export default function LandingPage() {
 
         {/* Auth */}
         <div style={s.navAuth}>
-          <a href="#" style={s.loginBtn}>Log In</a>
-          <a href="#" style={s.signupBtn}>Sign Up</a>
+          <a href="#" style={s.loginBtn} onClick={(e) => { e.preventDefault(); navigate('/login'); }}>Log In</a>
+          <a href="#" style={s.signupBtn} onClick={(e) => { e.preventDefault(); navigate('/signup'); }}>Sign Up</a>
         </div>
       </nav>
 
@@ -123,7 +125,7 @@ export default function LandingPage() {
 
         {/* CTAs */}
         <div className="hero-ctas" style={s.heroCtas}>
-          <a href="#" style={s.ctaFilled}>Get Started Now</a>
+          <a href="#" style={s.ctaFilled} onClick={(e) => { e.preventDefault(); navigate('/signup'); }}>Get Started Now</a>
           <a href="#" className="cta-outline" style={s.ctaOutline}>View Demo</a>
         </div>
 

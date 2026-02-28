@@ -83,3 +83,37 @@ All components use **inline `styles` objects** (not Tailwind classes) despite Ta
 - The XTTS language code must be a 2-letter ISO code (e.g., `"es"`, `"fr"`), not a full language name. The orchestrator currently does a naive `target_language[:2].lower()` conversion — this needs a proper mapping.
 - `word_timestamps=True` in Whisper is critical; downstream steps depend on per-segment timing.
 - The `backend/translator/` directory is a local Python virtualenv — do not commit it.
+- **Modal secret name discrepancy:** `app_translate.py` references `openai-secret` but CLAUDE.md documents it as `openai-api-secret`. The actual secret in Modal must match what the code uses (`openai-secret`).
+- **`speaker_ref.wav`**: 6-second mono WAV extracted from the source video's first 6 seconds (22050 Hz). Used by XTTS as the voice cloning reference — it captures the original speaker's vocal characteristics so the dubbed audio sounds like the same person.
+
+## Dependency Pins (app_xtts.py) — Do Not Remove
+
+These pins exist to fix real incompatibilities with `TTS==0.22.0`:
+- `transformers>=4.33.0,<4.40.0` — `BeamSearchScorer` was removed from `transformers.__init__` in 4.40, breaking TTS import
+- `torch<2.6.0` / `torchaudio<2.6.0` — PyTorch 2.6 changed `torch.load()` default to `weights_only=True`, breaking XTTS checkpoint loading
+
+## ML Testing
+
+Standalone test scripts exist for individual pipeline steps. They handle volume seeding and do not require a prior `modal deploy` (they import functions directly instead of using `modal.Function.from_name`).
+
+```bash
+modal run ml/test_xtts.py                          # saves test_xtts_test-xtts.wav locally
+modal run ml/test_xtts.py --job-id my-run --lang fr
+
+modal run ml/test_latentsync.py                    # self-contained, extracts audio from test video
+modal run ml/test_latentsync.py --audio-file test_xtts_test-xtts.wav  # use real XTTS output
+```
+
+## Status
+
+### Done
+- ML pipeline apps written (`app_whisper.py`, `app_translate.py`, `app_xtts.py`, `app_latentsync.py`, `orchestrator.py`)
+- Standalone test scripts: `ml/test_xtts.py`, `ml/test_latentsync.py`
+- Dependency pins fixed in `app_xtts.py` (transformers + torch version conflicts)
+
+### Still To Do
+- **Run and verify** XTTS and LatentSync tests end-to-end successfully
+- **Fix language code mapping** in orchestrator — replace `target_language[:2].lower()` with a proper ISO 639-1 lookup table
+- **Cloudflare R2 integration** — configure `do-spaces-secret` in Modal with R2 credentials (`S3_ENDPOINT_URL` = `https://<account_id>.r2.cloudflarestorage.com`)
+- **Backend webhook endpoint** — `backend/main.py` only has `GET /api/health`; needs a `POST /api/webhook` endpoint to receive job completion events from the orchestrator
+- **Frontend routing** — routes in `App.js` are commented out; app renders `<SignUp/>` directly
