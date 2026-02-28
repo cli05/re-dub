@@ -23,7 +23,7 @@ xtts_image = (
 # 4. Define the Serverless GPU Function
 @app.function(
     image=xtts_image,
-    gpu="A10G",
+    gpu="H100",
     timeout=600,
     volumes={"/models": model_vol, "/pipeline": pipeline_vol}
 )
