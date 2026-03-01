@@ -47,7 +47,7 @@ export default function Login() {
 
   return (
     <div style={s.app}>
-      <Header hideSearch={true} />
+      <Header hideSearch={true} hideNewDub={true} hideDropdown={true} />
 
       {/* Centered login area */}
       <main style={s.main}>
@@ -162,11 +162,6 @@ export default function Login() {
             <path d="M15 5c0 4-3 7-3 7m5-7c2 3 2 7 2 7" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
           </svg>
           <span style={s.footerCopy}>© 2024 Redub</span>
-        </div>
-        <div style={s.footerLinks}>
-          {["Terms of Service", "Privacy Policy", "Contact Support"].map(l => (
-            <a key={l} href="#" style={s.footerLink}>{l}</a>
-          ))}
         </div>
       </footer>
 

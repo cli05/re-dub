@@ -10,7 +10,7 @@ load_dotenv()
 
 from r2 import upload_file, generate_upload_url, generate_download_url, delete_file, list_files, object_exists
 from accounts import create_user, get_user_by_email, update_user
-from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step
+from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step, rename_job
 from auth import hash_password, verify_password, create_access_token, get_current_user
 
 app = FastAPI()
@@ -237,6 +237,18 @@ async def get_download_url(job_id: str, current_user: dict = Depends(get_current
     if job["status"] != "COMPLETED" or not job.get("output_key"):
         raise HTTPException(status_code=400, detail="Job output not available")
     return {"download_url": generate_download_url(job["output_key"], attachment=True)}
+
+
+@app.patch("/api/dub/{job_id}/name")
+async def rename_dub(job_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    job = await get_job(job_id, current_user["user_id"])
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    name = (body.get("project_name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="project_name is required")
+    await rename_job(job_id, name)
+    return {"project_name": name}
 
 
 @app.get("/api/projects")

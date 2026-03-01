@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     source_key      TEXT,
     output_key      TEXT,
     target_language TEXT,
+    project_name    TEXT,
     created_at      TEXT NOT NULL,
     completed_at    TEXT,
     error           TEXT,
@@ -23,5 +24,6 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 -- Migration for existing databases:
 -- ALTER TABLE jobs ADD COLUMN step INTEGER NOT NULL DEFAULT 0;
+-- ALTER TABLE jobs ADD COLUMN project_name TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);

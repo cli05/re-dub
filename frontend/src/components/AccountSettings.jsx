@@ -2,20 +2,6 @@ import { useState } from "react";
 import Header from "./Header";
 import { getUser, authFetch } from "../auth";
 
-const LANGUAGES = [
-  "Spanish (Español)",
-  "French (Français)",
-  "Mandarin (普通话)",
-  "Hindi (हिन्दी)",
-  "Arabic (العربية)",
-  "Portuguese (Português)",
-  "German (Deutsch)",
-  "Japanese (日本語)",
-  "Korean (한국어)",
-  "Italian (Italiano)",
-  "Russian (Русский)",
-  "Turkish (Türkçe)",
-];
 
 function SectionCard({ icon, title, children }) {
   return (
@@ -45,9 +31,6 @@ export default function AccountSettings() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [language, setLanguage] = useState(
-    storedUser?.preferences?.preferred_language ?? "Spanish (Español)"
-  );
   const [saved, setSaved] = useState(false);
   const [apiError, setApiError] = useState("");
   const [focusedField, setFocusedField] = useState(null);
@@ -73,7 +56,6 @@ export default function AccountSettings() {
         method: "PATCH",
         body: JSON.stringify({
           display_name: fullName,
-          preferences: { preferred_language: language },
         }),
       });
       if (!profileRes.ok) {
@@ -111,7 +93,6 @@ export default function AccountSettings() {
   function handleDiscard() {
     const u = getUser();
     setFullName(u?.display_name ?? "");
-    setLanguage(u?.preferences?.preferred_language ?? "Spanish (Español)");
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
@@ -222,35 +203,6 @@ export default function AccountSettings() {
           {confirmPassword && newPassword && confirmPassword !== newPassword && (
             <p style={s.errorMsg}>Passwords do not match</p>
           )}
-        </SectionCard>
-
-        {/* Preferences Section */}
-        <SectionCard
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="3" stroke="#00e5a0" strokeWidth="2"/>
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          }
-          title="Preferences Section"
-        >
-          <Field label="Preferred Target Language">
-            <p style={s.fieldHint}>This will be the default output language for your new dubbing projects.</p>
-            <div style={s.selectWrap}>
-              <select
-                value={language}
-                onChange={e => setLanguage(e.target.value)}
-                style={s.select}
-              >
-                {LANGUAGES.map(l => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={s.selectChevron}>
-                <path d="M6 9l6 6 6-6" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </div>
-          </Field>
         </SectionCard>
 
         {/* Action buttons */}
@@ -425,12 +377,6 @@ const s = {
     color: "rgba(255,255,255,0.5)",
     fontWeight: 500,
   },
-  fieldHint: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.32)",
-    margin: "-3px 0 6px",
-    lineHeight: 1.5,
-  },
   input: {
     background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.09)",
@@ -449,35 +395,6 @@ const s = {
     color: "#ff4d6d",
     marginTop: 4,
   },
-  selectWrap: {
-    position: "relative",
-    display: "inline-block",
-    maxWidth: 280,
-    width: "100%",
-  },
-  select: {
-    width: "100%",
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.09)",
-    borderRadius: 9,
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: 500,
-    padding: "10px 38px 10px 14px",
-    outline: "none",
-    fontFamily: "inherit",
-    cursor: "pointer",
-    appearance: "none",
-    WebkitAppearance: "none",
-  },
-  selectChevron: {
-    position: "absolute",
-    right: 12,
-    top: "50%",
-    transform: "translateY(-50%)",
-    pointerEvents: "none",
-  },
-
   // Actions
   actions: {
     display: "flex",
