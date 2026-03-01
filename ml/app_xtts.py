@@ -164,7 +164,7 @@ def _load_tts(checkpoint_volume_path: str = None):
 
 @app.function(
     image=xtts_image,
-    gpu="H100",
+    gpu="H200",
     timeout=1800,   # 30 min — fine-tuning can be slow
     secrets=[
         modal.Secret.from_name("backend-webhook-secret"),
@@ -374,7 +374,7 @@ def fine_tune_speaker(preset_id: str, audio_url: str):
 # 4. Define the Serverless GPU Function
 @app.function(
     image=xtts_image,
-    gpu="H100",
+    gpu="H200",
     timeout=900,   # longer timeout for per-segment generation
     volumes={"/models": model_vol, "/pipeline": pipeline_vol}
 )

@@ -42,7 +42,7 @@ MUSETALK_SENTINEL = f"{MUSETALK_DIR}/scripts/inference.py"
 # A10G is sufficient — MuseTalk is lighter than LatentSync's diffusion pipeline.
 @app.function(
     image=musetalk_image,
-    gpu="H100",
+    gpu="H200",
     timeout=1800,
     volumes={"/models": model_vol, "/pipeline": pipeline_vol}
 )
