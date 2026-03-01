@@ -1,22 +1,6 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "./Header";
 import StepProgress from "./StepProgress";
-
-const LANGUAGES = [
-  { code: "es", name: "Spanish", flag: "🇪🇸", dialects: ["Latin American", "Castilian (Spain)", "Neutral"] },
-  { code: "zh", name: "Mandarin", flag: "🇨🇳", dialects: ["Simplified", "Traditional"] },
-  { code: "hi", name: "Hindi", flag: "🇮🇳", dialects: [] },
-  { code: "fr", name: "French", flag: "🇫🇷", dialects: ["France", "Canadian", "Belgian"] },
-  { code: "ar", name: "Arabic", flag: "🇸🇦", dialects: ["Modern Standard", "Egyptian", "Gulf"] },
-  { code: "pt", name: "Portuguese", flag: "🇧🇷", dialects: ["Brazilian", "European"] },
-  { code: "de", name: "German", flag: "🇩🇪", dialects: [] },
-  { code: "ja", name: "Japanese", flag: "🇯🇵", dialects: [] },
-  { code: "ko", name: "Korean", flag: "🇰🇷", dialects: [] },
-  { code: "it", name: "Italian", flag: "🇮🇹", dialects: [] },
-  { code: "ru", name: "Russian", flag: "🇷🇺", dialects: [] },
-  { code: "tr", name: "Turkish", flag: "🇹🇷", dialects: [] },
-];
 
 const tips = [
   {
@@ -51,30 +35,46 @@ const tips = [
   },
 ];
 
-export default function NewDubStep2() {
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState("es");
-  const [dialect, setDialect] = useState("Latin American");
-  const navigate = useNavigate();
+// Summary data — in a real app these would come from props/context/store
+const summary = {
+  upload: {
+    fileName: "product_demo_v2.mp4",
+    duration: "02:45",
+    fileSize: "42.5 MB",
+  },
+  language: {
+    targetLanguage: "Spanish",
+    dialect: "Latin American",
+    originalLanguage: "English (Auto-detected)",
+  },
+  audio: {
+    voiceSelection: "Male Premium (AI)",
+    enabledFeatures: ["VOICE CLONING", "LIP SYNCING"],
+  },
+};
 
-  const selectedLang = LANGUAGES.find(l => l.code === selected);
-  const filtered = LANGUAGES.filter(l =>
-    l.name.toLowerCase().includes(search.toLowerCase())
+function SectionIcon({ children }) {
+  return (
+    <div style={styles.sectionIcon}>
+      {children}
+    </div>
   );
+}
 
-  function handleSelect(code) {
-    setSelected(code);
-    const lang = LANGUAGES.find(l => l.code === code);
-    if (lang?.dialects?.length) {
-      setDialect(lang.dialects[0]);
-    } else {
-      setDialect(null);
-    }
-  }
+function DetailRow({ label, value }) {
+  return (
+    <div style={styles.detailRow}>
+      <span style={styles.detailLabel}>{label}</span>
+      <span style={styles.detailValue}>{value}</span>
+    </div>
+  );
+}
 
+export default function NewDubStep4() {
+  const navigate = useNavigate();
   return (
     <div style={styles.app}>
-      <Header hideSearch />
+      <Header />
 
       <main style={styles.main}>
         {/* Title */}
@@ -83,83 +83,101 @@ export default function NewDubStep2() {
           <p style={styles.subtitle}>Translate and dub your video content effortlessly.</p>
         </div>
 
-        {/* Step progress — Upload completed, Language active */}
-        <StepProgress activeStep={2} />
+        {/* Progress — all completed except Confirm which is active */}
+        <StepProgress activeStep={4} />
 
-        {/* Step 2 card */}
+        {/* Step 4 card */}
         <div style={styles.card}>
           <div style={styles.cardHeader}>
             <div>
-              <span style={styles.stepLabel}>Step 2: Language Selection</span>
+              <span style={styles.stepLabel}>Step 4: Review & Confirm</span>
               <div style={styles.progressBar}>
                 <div style={styles.progressFill} />
               </div>
             </div>
-            <span style={styles.nextHint}>Next Step: Voice Selection</span>
+            <span style={styles.nextHint}>Final Step</span>
           </div>
 
-          {/* Search */}
-          <div style={styles.searchWrap}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.4, flexShrink: 0 }}>
-              <circle cx="11" cy="11" r="8" stroke="white" strokeWidth="2"/>
-              <path d="m21 21-4.35-4.35" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search for a language (e.g. Japanese, German...)"
-              style={styles.searchInput}
-            />
-          </div>
+          {/* Summary grid */}
+          <div style={styles.summaryGrid}>
 
-          {/* Language grid */}
-          <div style={styles.langGrid}>
-            {filtered.map(lang => (
-              <button
-                key={lang.code}
-                onClick={() => handleSelect(lang.code)}
-                style={{
-                  ...styles.langCard,
-                  ...(selected === lang.code ? styles.langCardActive : {}),
-                }}
-              >
-                <span style={styles.flag}>{lang.flag}</span>
-                <span style={styles.langName}>{lang.name}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Dialect selector */}
-          {selectedLang?.dialects?.length > 0 && (
-            <div style={styles.dialectSection}>
-              <p style={styles.dialectLabel}>SELECT DIALECT FOR {selectedLang.name.toUpperCase()}</p>
-              <div style={styles.dialectRow}>
-                {selectedLang.dialects.map(d => (
-                  <button
-                    key={d}
-                    onClick={() => setDialect(d)}
-                    style={{
-                      ...styles.dialectChip,
-                      ...(dialect === d ? styles.dialectChipActive : {}),
-                    }}
-                  >
-                    {d}
-                  </button>
-                ))}
+            {/* Upload Details */}
+            <div style={styles.summaryCol}>
+              <div style={styles.colHeader}>
+                <SectionIcon>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </SectionIcon>
+                <span style={styles.colTitle}>UPLOAD DETAILS</span>
+              </div>
+              <div style={styles.detailList}>
+                <DetailRow label="File Name" value={summary.upload.fileName} />
+                <DetailRow label="Duration" value={summary.upload.duration} />
+                <DetailRow label="File Size" value={summary.upload.fileSize} />
               </div>
             </div>
-          )}
 
-          {/* Nav buttons */}
+            {/* Divider */}
+            <div style={styles.verticalDivider} />
+
+            {/* Language Settings */}
+            <div style={styles.summaryCol}>
+              <div style={styles.colHeader}>
+                <SectionIcon>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#00e5a0" strokeWidth="2"/>
+                    <path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" stroke="#00e5a0" strokeWidth="2"/>
+                  </svg>
+                </SectionIcon>
+                <span style={styles.colTitle}>LANGUAGE SETTINGS</span>
+              </div>
+              <div style={styles.detailList}>
+                <DetailRow label="Target Language" value={summary.language.targetLanguage} />
+                <DetailRow label="Dialect" value={summary.language.dialect} />
+                <DetailRow label="Original Language" value={summary.language.originalLanguage} />
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={styles.verticalDivider} />
+
+            {/* Audio Preferences */}
+            <div style={styles.summaryCol}>
+              <div style={styles.colHeader}>
+                <SectionIcon>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" stroke="#00e5a0" strokeWidth="2"/>
+                    <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </SectionIcon>
+                <span style={styles.colTitle}>AUDIO PREFERENCES</span>
+              </div>
+              <div style={styles.detailList}>
+                <DetailRow label="Voice Selection" value={summary.audio.voiceSelection} />
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}>Enabled Features</span>
+                  <div style={styles.featureTags}>
+                    {summary.audio.enabledFeatures.map(f => (
+                      <span key={f} style={styles.featureTag}>{f}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Nav */}
           <div style={styles.navRow}>
-            <button style={styles.backBtn} onClick={() => navigate('/new-dub')}>
+            <button style={styles.backBtn} onClick={() => navigate('/new-dub/step-3')}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               Back
             </button>
-            <button style={styles.continueBtn} onClick={() => navigate('/new-dub/step-3')}>
-              Continue to Voice Selection
+            <button style={styles.startBtn} onClick={() => navigate('/preview')}>
+              Start Dubbing
             </button>
           </div>
         </div>
@@ -187,7 +205,7 @@ export default function NewDubStep2() {
           <span style={styles.statusDot} />
           <span style={styles.footerText}>System Operational</span>
           <span style={{ color: "rgba(255,255,255,0.15)", fontSize: 12 }}>|</span>
-          <span style={styles.footerText}>© 2024 PolyGlot Dubs AI</span>
+          <span style={styles.footerText}>© 2024 Redub</span>
         </div>
       </footer>
     </div>
@@ -236,7 +254,7 @@ const styles = {
     display: "flex",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    marginBottom: 20,
+    marginBottom: 24,
     gap: 12,
   },
   stepLabel: {
@@ -253,7 +271,7 @@ const styles = {
     overflow: "hidden",
   },
   progressFill: {
-    width: "50%",
+    width: "100%",
     height: "100%",
     background: "linear-gradient(90deg, #00e5a0, #4fc3f7)",
     borderRadius: 4,
@@ -264,93 +282,88 @@ const styles = {
     whiteSpace: "nowrap",
     marginTop: 4,
   },
-  searchWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 10,
-    padding: "11px 16px",
-    marginBottom: 20,
-  },
-  searchInput: {
-    background: "transparent",
-    border: "none",
-    outline: "none",
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 13,
-    width: "100%",
-  },
-  langGrid: {
+  summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: 12,
-    marginBottom: 24,
-  },
-  langCard: {
+    gridTemplateColumns: "1fr auto 1fr auto 1fr",
+    gap: 0,
     background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.07)",
     borderRadius: 12,
-    padding: "20px 16px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 10,
-    cursor: "pointer",
-    transition: "all 0.18s",
-    color: "rgba(255,255,255,0.75)",
-  },
-  langCardActive: {
-    background: "rgba(0,229,160,0.07)",
-    border: "1.5px solid #00e5a0",
-    color: "#fff",
-    boxShadow: "0 0 20px rgba(0,229,160,0.1)",
-  },
-  flag: {
-    fontSize: 28,
-    lineHeight: 1,
-  },
-  langName: {
-    fontSize: 14,
-    fontWeight: 600,
-  },
-  dialectSection: {
+    padding: "22px 20px",
     marginBottom: 28,
   },
-  dialectLabel: {
+  summaryCol: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    padding: "0 16px",
+  },
+  verticalDivider: {
+    width: 1,
+    background: "rgba(255,255,255,0.07)",
+    margin: "0 4px",
+  },
+  colHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  sectionIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    background: "rgba(0,229,160,0.1)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  colTitle: {
     fontSize: 10,
     fontWeight: 700,
-    letterSpacing: 1.5,
-    color: "rgba(255,255,255,0.35)",
-    marginBottom: 10,
-    marginTop: 0,
-  },
-  dialectRow: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  dialectChip: {
-    background: "transparent",
-    border: "1px solid rgba(255,255,255,0.15)",
-    borderRadius: 20,
-    padding: "6px 16px",
-    fontSize: 13,
-    color: "rgba(255,255,255,0.55)",
-    cursor: "pointer",
-    transition: "all 0.18s",
-  },
-  dialectChipActive: {
-    background: "rgba(0,229,160,0.12)",
-    border: "1px solid #00e5a0",
+    letterSpacing: 1.2,
     color: "#00e5a0",
+  },
+  detailList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+  },
+  detailRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+  },
+  detailLabel: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.35)",
+  },
+  detailValue: {
+    fontSize: 13,
+    fontWeight: 500,
+    color: "#fff",
+  },
+  featureTags: {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap",
+    marginTop: 2,
+  },
+  featureTag: {
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: 0.8,
+    color: "#00e5a0",
+    background: "rgba(0,229,160,0.12)",
+    border: "1px solid rgba(0,229,160,0.25)",
+    borderRadius: 20,
+    padding: "3px 9px",
   },
   navRow: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 8,
     paddingTop: 20,
     borderTop: "1px solid rgba(255,255,255,0.06)",
   },
@@ -365,15 +378,16 @@ const styles = {
     cursor: "pointer",
     padding: "8px 4px",
   },
-  continueBtn: {
+  startBtn: {
     background: "#00e5a0",
     color: "#0a1a18",
     border: "none",
     borderRadius: 8,
-    padding: "11px 28px",
-    fontSize: 14,
-    fontWeight: 600,
+    padding: "12px 36px",
+    fontSize: 15,
+    fontWeight: 700,
     cursor: "pointer",
+    letterSpacing: "-0.2px",
   },
   tipsGrid: {
     display: "grid",

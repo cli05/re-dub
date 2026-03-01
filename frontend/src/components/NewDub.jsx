@@ -1,7 +1,30 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "./Header";
-import StepProgress from "./StepProgress";
+import { getToken, authFetch } from "../auth";
+
+const API_BASE = "http://127.0.0.1:8000";
+
+// All 17 languages supported by XTTS v2 with their exact ISO codes
+const LANGUAGES = [
+  { code: "en", name: "English",    flag: "🇬🇧", dialects: [] },
+  { code: "es", name: "Spanish",    flag: "🇪🇸", dialects: ["Latin American", "Castilian (Spain)", "Neutral"] },
+  { code: "fr", name: "French",     flag: "🇫🇷", dialects: ["France", "Canadian", "Belgian"] },
+  { code: "de", name: "German",     flag: "🇩🇪", dialects: [] },
+  { code: "it", name: "Italian",    flag: "🇮🇹", dialects: [] },
+  { code: "pt", name: "Portuguese", flag: "🇧🇷", dialects: ["Brazilian", "European"] },
+  { code: "pl", name: "Polish",     flag: "🇵🇱", dialects: [] },
+  { code: "tr", name: "Turkish",    flag: "🇹🇷", dialects: [] },
+  { code: "ru", name: "Russian",    flag: "🇷🇺", dialects: [] },
+  { code: "nl", name: "Dutch",      flag: "🇳🇱", dialects: [] },
+  { code: "cs", name: "Czech",      flag: "🇨🇿", dialects: [] },
+  { code: "ar", name: "Arabic",     flag: "🇸🇦", dialects: ["Modern Standard", "Egyptian", "Gulf"] },
+  { code: "zh-cn", name: "Chinese", flag: "🇨🇳", dialects: [] },
+  { code: "ja", name: "Japanese",   flag: "🇯🇵", dialects: [] },
+  { code: "hu", name: "Hungarian",  flag: "🇭🇺", dialects: [] },
+  { code: "ko", name: "Korean",     flag: "🇰🇷", dialects: [] },
+  { code: "hi", name: "Hindi",      flag: "🇮🇳", dialects: [] },
+];
 
 const tips = [
   {
@@ -36,11 +59,60 @@ const tips = [
   },
 ];
 
-export default function NewDubStep1() {
+export default function NewDub() {
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState(null);
+  const [selected, setSelected] = useState("es");
+  const [dialect, setDialect] = useState("Latin American");
+  const [langSearch, setLangSearch] = useState("");
+  const [attempted, setAttempted] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
   const inputRef = useRef(null);
   const navigate = useNavigate();
+
+  const canSubmit = !!file;
+
+  async function handleStartDubbing() {
+    if (!canSubmit) { setAttempted(true); return; }
+    setUploading(true);
+    setUploadError(null);
+    try {
+      // 1. Upload source video to R2 via backend
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch(`${API_BASE}/api/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const { file_key } = await uploadRes.json();
+
+      // 2. Create dubbing job
+      const dubRes = await authFetch("/api/dub", {
+        method: "POST",
+        body: JSON.stringify({
+          file_key,
+          project_id: crypto.randomUUID().slice(0, 8),
+          target_language: selectedLang.code,
+        }),
+      });
+      if (!dubRes.ok) throw new Error("Failed to start dubbing job");
+      const { job_id } = await dubRes.json();
+
+      // 3. Hand off to loading screen
+      navigate("/loading", { state: { job_id } });
+    } catch (err) {
+      setUploadError(err.message || "Something went wrong");
+      setUploading(false);
+    }
+  }
+
+  const selectedLang = LANGUAGES.find(l => l.code === selected);
+  const filtered = LANGUAGES.filter(l =>
+    l.name.toLowerCase().includes(langSearch.toLowerCase())
+  );
 
   function handleDrop(e) {
     e.preventDefault();
@@ -50,8 +122,18 @@ export default function NewDubStep1() {
   }
 
   function handleFileChange(e) {
-    const selected = e.target.files[0];
-    if (selected) setFile(selected);
+    const f = e.target.files[0];
+    if (f) setFile(f);
+  }
+
+  function handleSelectLang(code) {
+    setSelected(code);
+    const lang = LANGUAGES.find(l => l.code === code);
+    if (lang?.dialects?.length) {
+      setDialect(lang.dialects[0]);
+    } else {
+      setDialect(null);
+    }
   }
 
   return (
@@ -59,23 +141,15 @@ export default function NewDubStep1() {
       <Header hideSearch />
 
       <main style={styles.main}>
-        {/* Page title */}
         <div style={styles.titleBlock}>
           <h1 style={styles.title}>New Dub</h1>
           <p style={styles.subtitle}>Translate and dub your video content effortlessly.</p>
         </div>
 
-        {/* Step progress tracker */}
-        <StepProgress />
+        <div style={styles.card}>
+          {/* Upload section */}
+          <p style={styles.sectionLabel}>Upload your video</p>
 
-        {/* Upload card */}
-        <form style={styles.uploadCard}>
-          <div style={styles.uploadCardHeader}>
-            <span style={styles.stepLabel}>Step 1: Upload your video</span>
-            <span style={styles.nextHint}>Wait: Next Step is Language selection</span>
-          </div>
-
-          {/* Drop zone */}
           <div
             style={{
               ...styles.dropzone,
@@ -139,7 +213,6 @@ export default function NewDubStep1() {
             )}
           </div>
 
-          {/* Format info */}
           <div style={styles.formatBar}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="2"/>
@@ -152,21 +225,79 @@ export default function NewDubStep1() {
             </span>
           </div>
 
-          {/* Nav buttons */}
+          {attempted && !file && (
+            <p style={styles.fieldError}>Please upload a video before starting.</p>
+          )}
+
+          <div style={styles.divider} />
+
+          {/* Language selection section */}
+          <p style={styles.sectionLabel}>Select target language</p>
+
+          <div style={styles.searchWrap}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.4, flexShrink: 0 }}>
+              <circle cx="11" cy="11" r="8" stroke="white" strokeWidth="2"/>
+              <path d="m21 21-4.35-4.35" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <input
+              value={langSearch}
+              onChange={e => setLangSearch(e.target.value)}
+              placeholder="Search for a language (e.g. Japanese, German...)"
+              style={styles.searchInput}
+            />
+          </div>
+
+          <div style={styles.langGrid}>
+            {filtered.map(lang => (
+              <button
+                key={lang.code}
+                onClick={() => handleSelectLang(lang.code)}
+                style={{
+                  ...styles.langCard,
+                  ...(selected === lang.code ? styles.langCardActive : {}),
+                }}
+              >
+                <span style={styles.flag}>{lang.flag}</span>
+                <span style={styles.langName}>{lang.name}</span>
+              </button>
+            ))}
+          </div>
+
+          {selectedLang?.dialects?.length > 0 && (
+            <div style={styles.dialectSection}>
+              <p style={styles.dialectLabel}>SELECT DIALECT FOR {selectedLang.name.toUpperCase()}</p>
+              <div style={styles.dialectRow}>
+                {selectedLang.dialects.map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setDialect(d)}
+                    style={{
+                      ...styles.dialectChip,
+                      ...(dialect === d ? styles.dialectChipActive : {}),
+                    }}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {uploadError && (
+            <p style={styles.fieldError}>{uploadError}</p>
+          )}
+
           <div style={styles.navRow}>
-            <button disabled style={styles.backBtnDisabled}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Previous
-            </button>
-            <button style={styles.nextBtn} onClick={() => navigate('/new-dub/step-2')}>
-              Continue to Language
+            <button
+              style={{ ...styles.startBtn, ...((canSubmit && !uploading) ? {} : styles.startBtnDisabled) }}
+              onClick={handleStartDubbing}
+              disabled={uploading}
+            >
+              {uploading ? "Uploading…" : "Start Dubbing"}
             </button>
           </div>
-        </form>
+        </div>
 
-        {/* Tip cards */}
         <div style={styles.tipsGrid}>
           {tips.map((tip, i) => (
             <div key={i} style={styles.tipCard}>
@@ -178,7 +309,6 @@ export default function NewDubStep1() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer style={styles.footer}>
         <div style={{ display: "flex", gap: 24 }}>
           {["View Docs", "Terms of Service", "Support"].map(l => (
@@ -189,7 +319,7 @@ export default function NewDubStep1() {
           <span style={styles.statusDot} />
           <span style={styles.footerText}>System Operational</span>
           <span style={{ color: "rgba(255,255,255,0.15)", fontSize: 12 }}>|</span>
-          <span style={styles.footerText}>© 2024 PolyGlot Dubs AI</span>
+          <span style={styles.footerText}>© 2024 Redub</span>
         </div>
       </footer>
     </div>
@@ -212,35 +342,6 @@ const styles = {
     width: "100%",
     padding: "32px 24px",
   },
-  navRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 20,
-    paddingTop: 20,
-    borderTop: "1px solid rgba(255,255,255,0.06)",
-  },
-  backBtnDisabled: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    background: "transparent",
-    border: "none",
-    color: "rgba(255,255,255,0.2)",
-    fontSize: 14,
-    cursor: "not-allowed",
-    padding: "8px 4px",
-  },
-  nextBtn: {
-    background: "#00e5a0",
-    color: "#0a1a18",
-    border: "none",
-    borderRadius: 8,
-    padding: "11px 28px",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
   titleBlock: {
     marginBottom: 24,
   },
@@ -254,27 +355,19 @@ const styles = {
     fontSize: 13,
     color: "rgba(255,255,255,0.45)",
     marginTop: 5,
+    marginBottom: 0,
   },
-  uploadCard: {
+  card: {
     background: "#0f2420",
     border: "1px solid rgba(255,255,255,0.07)",
     borderRadius: 14,
-    padding: "22px 24px",
+    padding: "24px",
     marginBottom: 18,
   },
-  uploadCardHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 18,
-  },
-  stepLabel: {
+  sectionLabel: {
     fontSize: 15,
     fontWeight: 600,
-  },
-  nextHint: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.35)",
+    margin: "0 0 14px",
   },
   dropzone: {
     border: "1.5px dashed",
@@ -390,6 +483,121 @@ const styles = {
   formatDot: {
     color: "rgba(255,255,255,0.2)",
     margin: "0 2px",
+  },
+  divider: {
+    height: 1,
+    background: "rgba(255,255,255,0.06)",
+    margin: "24px 0",
+  },
+  searchWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 10,
+    padding: "11px 16px",
+    marginBottom: 16,
+  },
+  searchInput: {
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 13,
+    width: "100%",
+  },
+  langGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: 10,
+    marginBottom: 20,
+  },
+  langCard: {
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 12,
+    padding: "16px 12px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
+    cursor: "pointer",
+    transition: "all 0.18s",
+    color: "rgba(255,255,255,0.75)",
+  },
+  langCardActive: {
+    background: "rgba(0,229,160,0.07)",
+    border: "1.5px solid #00e5a0",
+    color: "#fff",
+    boxShadow: "0 0 20px rgba(0,229,160,0.1)",
+  },
+  flag: {
+    fontSize: 26,
+    lineHeight: 1,
+  },
+  langName: {
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  dialectSection: {
+    marginBottom: 24,
+  },
+  dialectLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: 1.5,
+    color: "rgba(255,255,255,0.35)",
+    marginBottom: 10,
+    marginTop: 0,
+  },
+  dialectRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  dialectChip: {
+    background: "transparent",
+    border: "1px solid rgba(255,255,255,0.15)",
+    borderRadius: 20,
+    padding: "6px 16px",
+    fontSize: 13,
+    color: "rgba(255,255,255,0.55)",
+    cursor: "pointer",
+    transition: "all 0.18s",
+  },
+  dialectChipActive: {
+    background: "rgba(0,229,160,0.12)",
+    border: "1px solid #00e5a0",
+    color: "#00e5a0",
+  },
+  navRow: {
+    display: "flex",
+    justifyContent: "flex-end",
+    paddingTop: 20,
+    borderTop: "1px solid rgba(255,255,255,0.06)",
+  },
+  startBtn: {
+    background: "#00e5a0",
+    color: "#0a1a18",
+    border: "none",
+    borderRadius: 8,
+    padding: "12px 36px",
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: "pointer",
+    letterSpacing: "-0.2px",
+  },
+  startBtnDisabled: {
+    background: "rgba(255,255,255,0.08)",
+    color: "rgba(255,255,255,0.25)",
+    cursor: "not-allowed",
+  },
+  fieldError: {
+    fontSize: 12,
+    color: "#ff6b6b",
+    margin: "8px 0 0",
+    textAlign: "center",
   },
   tipsGrid: {
     display: "grid",

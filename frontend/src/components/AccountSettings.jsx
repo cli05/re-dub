@@ -295,7 +295,7 @@ export default function AccountSettings() {
                 <path d="M3 5h12M9 3v2m4.5 13c0 2.485-2.015 4.5-4.5 4.5S4.5 20.485 4.5 18c0-2.484 2.015-4.5 4.5-4.5s4.5 2.016 4.5 4.5z" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
                 <path d="M15 5c0 4-3 7-3 7m5-7c2 3 2 7 2 7" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
               </svg>
-              <span style={s.footerLogoText}>PolyGlot Dubs</span>
+              <span style={s.footerLogoText}>Redub</span>
             </div>
             <p style={s.footerTagline}>
               Breaking language barriers one video at a<br />time with cutting-edge AI technology.
@@ -327,7 +327,7 @@ export default function AccountSettings() {
         </div>
 
         <div style={s.footerBottom}>
-          <span style={s.footerCopy}>© 2024 PolyGlot Dubs AI Inc. All rights reserved.</span>
+          <span style={s.footerCopy}>© 2024 Redub Inc. All rights reserved.</span>
           <div style={s.footerIcons}>
             {[
               <path key="g" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" stroke="none" fill="currentColor"/>,

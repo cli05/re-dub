@@ -19,12 +19,16 @@ async def create_job(user_id: str, file_key: str, project_id: str, target_langua
 
     video_url = generate_download_url(file_key, expires=7200)
 
-    orchestrator_func = modal.Function.from_name("redub-orchestrator", "process_video")
-    orchestrator_func.spawn(
-        job_id=job_id,
-        video_url=video_url,
-        target_language=target_language,
-    )
+    try:
+        orchestrator_func = modal.Function.from_name("redub-orchestrator", "process_video")
+        await orchestrator_func.spawn.aio(
+            job_id=job_id,
+            video_url=video_url,
+            target_language=target_language,
+        )
+    except Exception as e:
+        # Modal app not deployed yet — job is created in DB but pipeline won't run.
+        print(f"[warn] Could not spawn orchestrator for job {job_id}: {e}")
 
     return job_id
 
@@ -40,6 +44,13 @@ async def list_jobs(user_id: str) -> list[dict]:
     return await fetch_all(
         "SELECT * FROM jobs WHERE user_id = ? ORDER BY created_at DESC",
         [user_id],
+    )
+
+
+async def update_job_step(job_id: str, step: int):
+    await execute(
+        "UPDATE jobs SET step = ?, status = 'PROCESSING' WHERE job_id = ?",
+        [step, job_id],
     )
 
 

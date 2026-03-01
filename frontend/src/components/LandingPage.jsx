@@ -84,12 +84,12 @@ export default function LandingPage() {
       {/* ── NAV ─────────────────────────────────────────── */}
       <nav style={s.nav}>
         {/* Logo */}
-        <div style={s.navLogo} onClick={() => navigate('/dashboard')}>
+        <div style={s.navLogo}onClick={() => navigate('/')}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
             <path d="M3 5h12M9 3v2m4.5 13c0 2.485-2.015 4.5-4.5 4.5S4.5 20.485 4.5 18c0-2.484 2.015-4.5 4.5-4.5s4.5 2.016 4.5 4.5z" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
             <path d="M15 5c0 4-3 7-3 7m5-7c2 3 2 7 2 7" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
           </svg>
-          <span style={s.navLogoText}>PolyGlot Dubs</span>
+          <span style={s.navLogoText}>Redub</span>
         </div>
 
 
@@ -105,16 +105,10 @@ export default function LandingPage() {
         {/* Glowing orb background */}
         <div style={s.orb} />
 
-        {/* Badge */}
-        <div className="badge-pill" style={s.badge}>
-          <span style={s.badgeDot} />
-          NEW AI MODEL RELEASED
-        </div>
-
         {/* Headline */}
         <h1 className="hero-title" style={s.heroTitle}>
           Welcome to{" "}
-          <span style={s.heroAccent}>PolyGlot<br />Dubs</span>
+          <span style={s.heroAccent}>Redub</span>
         </h1>
 
         {/* Sub */}
@@ -126,7 +120,6 @@ export default function LandingPage() {
         {/* CTAs */}
         <div className="hero-ctas" style={s.heroCtas}>
           <a href="#" style={s.ctaFilled} onClick={(e) => { e.preventDefault(); navigate('/signup'); }}>Get Started Now</a>
-          <a href="#" className="cta-outline" style={s.ctaOutline}>View Demo</a>
         </div>
 
         {/* Mock screen */}
@@ -198,7 +191,7 @@ export default function LandingPage() {
                   <path d="M15 5c0 4-3 7-3 7m5-7c2 3 2 7 2 7" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
               ),
-              stat: "100+ Languages",
+              stat: "15+ Languages",
               desc: "Translate your content into any major global language with native-level fluency and context awareness.",
             },
             {
@@ -241,17 +234,6 @@ export default function LandingPage() {
       {/* ── FOOTER ──────────────────────────────────────── */}
       <footer style={s.footer}>
         <div style={s.footerTop}>
-          <a href="#" style={s.footerDocsLink}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="2"/>
-              <polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2"/>
-            </svg>
-            View Docs
-          </a>
-          <div style={s.footerStatus}>
-            <span style={s.statusDot} />
-            System Status: All Systems Operational
-          </div>
         </div>
         <div style={s.footerIcons}>
           {[
@@ -264,7 +246,7 @@ export default function LandingPage() {
             </button>
           ))}
         </div>
-        <p style={s.footerCopy}>© 2024 PolyGlot Dubs. Empowering creators to speak to the world.</p>
+        <p style={s.footerCopy}>© 2026 Redub. Empowering creators to speak to the world.</p>
       </footer>
     </div>
   );

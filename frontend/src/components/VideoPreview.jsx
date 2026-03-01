@@ -280,7 +280,7 @@ export default function VideoPreview() {
 
       {/* Footer */}
       <footer style={styles.footer}>
-        <span style={styles.footerCopy}>© 2024 PolyGlot Dubs. All rights reserved.</span>
+        <span style={styles.footerCopy}>© 2024 Redub. All rights reserved.</span>
         <div style={styles.footerLinks}>
           {["Documentation", "Support", "Privacy Policy"].map(l => (
             <a key={l} href="#" style={styles.footerLink}>{l}</a>

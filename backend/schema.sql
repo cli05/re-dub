@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     job_id          TEXT PRIMARY KEY,
     user_id         TEXT NOT NULL,
     status          TEXT NOT NULL DEFAULT 'PENDING',
+    step            INTEGER NOT NULL DEFAULT 0,
     source_key      TEXT,
     output_key      TEXT,
     target_language TEXT,
@@ -19,5 +20,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     error           TEXT,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
+
+-- Migration for existing databases:
+-- ALTER TABLE jobs ADD COLUMN step INTEGER NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
