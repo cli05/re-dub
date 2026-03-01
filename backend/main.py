@@ -12,6 +12,7 @@ from r2 import upload_file, generate_upload_url, generate_download_url, delete_f
 from accounts import create_user, get_user_by_email, update_user
 from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step
 from auth import hash_password, verify_password, create_access_token, get_current_user
+from presets import create_preset, get_preset, list_presets, complete_preset, fail_preset, delete_preset
 
 app = FastAPI()
 
@@ -179,6 +180,7 @@ class DubRequest(BaseModel):
     file_key: str        # R2 key of the uploaded source video
     project_id: str      # Used to namespace the job_id
     target_language: str # e.g. "Spanish", "French"
+    voice_preset_id: str | None = None  # Optional fine-tuned voice preset
 
 
 @app.post("/api/dub")
@@ -192,6 +194,7 @@ async def start_dub(
         file_key=req.file_key,
         project_id=req.project_id,
         target_language=req.target_language,
+        voice_preset_id=req.voice_preset_id,
     )
     return {"job_id": job_id, "status": "PENDING"}
 
@@ -234,6 +237,79 @@ async def list_projects(current_user: dict = Depends(get_current_user)):
             j["download_url"] = generate_download_url(j["output_key"])
         result.append(j)
     return {"projects": result}
+
+
+# ---------------------------------------------------------------------------
+# Voice Presets — CRUD + webhook
+# ---------------------------------------------------------------------------
+
+class CreatePresetRequest(BaseModel):
+    name: str
+    audio_key: str       # R2 key of the uploaded reference audio
+    duration_sec: float  # Duration of the audio in seconds
+
+
+@app.post("/api/presets", status_code=201)
+async def create_voice_preset(
+    req: CreatePresetRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload reference audio and start fine-tuning a voice preset."""
+    if req.duration_sec < 30:
+        raise HTTPException(status_code=400, detail="Reference audio must be at least 30 seconds.")
+    preset = await create_preset(
+        user_id=current_user["user_id"],
+        name=req.name,
+        audio_key=req.audio_key,
+        duration_sec=req.duration_sec,
+    )
+    return preset
+
+
+@app.get("/api/presets")
+async def list_voice_presets(current_user: dict = Depends(get_current_user)):
+    return {"presets": await list_presets(current_user["user_id"])}
+
+
+@app.get("/api/presets/{preset_id}")
+async def get_voice_preset(preset_id: str, current_user: dict = Depends(get_current_user)):
+    preset = await get_preset(preset_id, current_user["user_id"])
+    if not preset:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    return preset
+
+
+@app.delete("/api/presets/{preset_id}")
+async def delete_voice_preset(preset_id: str, current_user: dict = Depends(get_current_user)):
+    deleted = await delete_preset(preset_id, current_user["user_id"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    return {"deleted": preset_id}
+
+
+class PresetWebhookPayload(BaseModel):
+    preset_id: str
+    status: str                         # "READY" or "FAILED"
+    checkpoint_volume_path: str | None = None
+    error: str | None = None
+
+
+@app.post("/api/webhook/preset-complete")
+async def preset_complete_webhook(
+    payload: PresetWebhookPayload,
+    authorization: str = Header(None),
+):
+    """Receive fine-tuning completion callback from the Modal XTTS app."""
+    secret = os.getenv("WEBHOOK_SECRET")
+    if secret and authorization != f"Bearer {secret}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if payload.status == "READY" and payload.checkpoint_volume_path:
+        await complete_preset(payload.preset_id, payload.checkpoint_volume_path)
+    else:
+        await fail_preset(payload.preset_id, payload.error or "Unknown error")
+
+    return {"received": True}
 
 
 # ---------------------------------------------------------------------------

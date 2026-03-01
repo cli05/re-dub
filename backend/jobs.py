@@ -7,7 +7,7 @@ from d1 import fetch_one, fetch_all, execute
 from r2 import generate_download_url
 
 
-async def create_job(user_id: str, file_key: str, project_id: str, target_language: str) -> str:
+async def create_job(user_id: str, file_key: str, project_id: str, target_language: str, voice_preset_id: str = None) -> str:
     job_id = f"{project_id}-{uuid.uuid4().hex[:8]}"
     now = datetime.now(timezone.utc).isoformat()
 
@@ -19,12 +19,22 @@ async def create_job(user_id: str, file_key: str, project_id: str, target_langua
 
     video_url = generate_download_url(file_key, expires=7200)
 
+    # Look up checkpoint path for the voice preset (if any)
+    checkpoint_volume_path = None
+    if voice_preset_id:
+        from presets import get_preset
+        preset = await get_preset(voice_preset_id, user_id)
+        if preset and preset.get("status") == "READY":
+            checkpoint_volume_path = preset.get("checkpoint_volume_path")
+
     try:
         orchestrator_func = modal.Function.from_name("redub-orchestrator", "process_video")
         await orchestrator_func.spawn.aio(
             job_id=job_id,
             video_url=video_url,
             target_language=target_language,
+            voice_preset_id=voice_preset_id,
+            checkpoint_volume_path=checkpoint_volume_path,
         )
     except Exception as e:
         # Modal app not deployed yet — job is created in DB but pipeline won't run.
