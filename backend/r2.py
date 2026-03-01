@@ -29,13 +29,12 @@ def generate_upload_url(key, content_type="video/mp4", expires=3600):
     )
 
 
-def generate_download_url(key, expires=3600):
+def generate_download_url(key, expires=3600, attachment=False):
     """Generate a presigned URL for downloading a file from R2."""
-    return s3.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": BUCKET, "Key": key},
-        ExpiresIn=expires,
-    )
+    params = {"Bucket": BUCKET, "Key": key}
+    if attachment:
+        params["ResponseContentDisposition"] = 'attachment; filename="dubbed.mp4"'
+    return s3.generate_presigned_url("get_object", Params=params, ExpiresIn=expires)
 
 
 def delete_file(key):

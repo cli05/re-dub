@@ -48,7 +48,7 @@ export default function LoadingScreen() {
           clearInterval(intervalRef.current);
           setCurrentStep(STEPS.length - 1);
           setDone(true);
-          setTimeout(() => navigate("/preview", { state: { downloadUrl: data.download_url } }), 1000);
+          setTimeout(() => navigate("/preview", { state: { downloadUrl: data.download_url, job_id: jobId, target_language: data.target_language } }), 1000);
           return;
         }
 

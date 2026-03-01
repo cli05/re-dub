@@ -214,13 +214,29 @@ async def get_dub_status(
             job["status"] = "COMPLETED"
             job["output_key"] = output_key
 
-    response = {"job_id": job_id, "status": job["status"], "step": job.get("step", 0)}
+    response = {
+        "job_id": job_id,
+        "status": job["status"],
+        "step": job.get("step", 0),
+        "target_language": job.get("target_language", ""),
+    }
     if job["status"] == "COMPLETED":
         response["output_key"] = job["output_key"]
         response["download_url"] = generate_download_url(job["output_key"])
     elif job["status"] == "FAILED":
         response["error"] = job["error"]
     return response
+
+
+@app.get("/api/dub/{job_id}/download")
+async def get_download_url(job_id: str, current_user: dict = Depends(get_current_user)):
+    """Return a short-lived presigned download URL with Content-Disposition: attachment."""
+    job = await get_job(job_id, current_user["user_id"])
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["status"] != "COMPLETED" or not job.get("output_key"):
+        raise HTTPException(status_code=400, detail="Job output not available")
+    return {"download_url": generate_download_url(job["output_key"], attachment=True)}
 
 
 @app.get("/api/projects")
@@ -230,8 +246,12 @@ async def list_projects(current_user: dict = Depends(get_current_user)):
     result = []
     for job in jobs:
         j = dict(job)
-        if j.get("status") == "COMPLETED" and j.get("output_key"):
-            j["download_url"] = generate_download_url(j["output_key"])
+        if j.get("status") != "COMPLETED" or not j.get("output_key"):
+            continue
+        if not object_exists(j["output_key"]):
+            await fail_job(j["job_id"], "Output file was deleted")
+            continue
+        j["download_url"] = generate_download_url(j["output_key"])
         result.append(j)
     return {"projects": result}
 
