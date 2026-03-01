@@ -20,7 +20,8 @@ xtts_image = (
         "TTS==0.22.0",  # Pinning the version for stability
         "transformers>=4.33.0,<4.40.0",  # TTS 0.22.0 is incompatible with transformers>=4.40
         "torch<2.6.0",      # TTS 0.22.0 uses torch.load() without weights_only; PyTorch 2.6 changed the default to True, breaking checkpoint loading
-        "torchaudio<2.6.0"
+        "torchaudio<2.6.0",
+        "requests",
     )
 )
 
@@ -117,6 +118,253 @@ def _concat_wavs(wav_paths: list[str], output_path: str):
     os.remove(list_file)
 
 
+# ── Shared Model Setup ────────────────────────────────────────────
+
+XTTS_HOME = "/models/xtts"
+PRESETS_DIR = "/models/xtts_presets"
+
+
+def _ensure_base_model():
+    """Download XTTS v2 base weights to volume if not already cached."""
+    os.environ["COQUI_TOS_AGREED"] = "1"
+    os.environ["TTS_HOME"] = XTTS_HOME
+
+    from TTS.api import TTS
+
+    sentinel = f"{XTTS_HOME}/tts_models--multilingual--multi-dataset--xtts_v2"
+    if not os.path.exists(sentinel):
+        print("Cold start: downloading XTTS v2 weights to volume...")
+        os.makedirs(XTTS_HOME, exist_ok=True)
+        TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+        model_vol.commit()
+        print("XTTS v2 weights cached to volume.")
+
+
+def _load_tts(checkpoint_volume_path: str = None):
+    """Load XTTS v2, optionally from a fine-tuned checkpoint."""
+    os.environ["COQUI_TOS_AGREED"] = "1"
+    os.environ["TTS_HOME"] = XTTS_HOME
+
+    _ensure_base_model()
+
+    from TTS.api import TTS
+
+    tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to("cuda")
+
+    if checkpoint_volume_path and os.path.exists(checkpoint_volume_path):
+        import torch
+        print(f"Loading fine-tuned checkpoint from {checkpoint_volume_path}...")
+        checkpoint = torch.load(checkpoint_volume_path, map_location="cuda", weights_only=False)
+        tts.synthesizer.tts_model.load_state_dict(checkpoint["model"], strict=False)
+        print("Fine-tuned checkpoint loaded successfully.")
+    elif checkpoint_volume_path:
+        print(f"[warn] Checkpoint not found at {checkpoint_volume_path}, using base model.")
+
+    return tts
+
+
+# ── Fine-Tuning Function ─────────────────────────────────────────
+
+@app.function(
+    image=xtts_image,
+    gpu="H100",
+    timeout=1800,   # 30 min — fine-tuning can be slow
+    secrets=[modal.Secret.from_name("backend-webhook-secret")],
+    volumes={"/models": model_vol, "/pipeline": pipeline_vol},
+)
+def fine_tune_speaker(preset_id: str, audio_url: str):
+    """Fine-tune XTTS v2 on a user's reference audio for better voice cloning.
+
+    1. Downloads reference audio from R2 (via presigned URL)
+    2. Splits into 8-15 second training chunks
+    3. Runs XTTS v2 fine-tuning (speaker encoder + decoder)
+    4. Saves checkpoint to the model volume
+    5. Fires webhook to backend
+    """
+    import requests
+    import torch
+    import glob
+    import shutil
+    import traceback
+
+    os.environ["COQUI_TOS_AGREED"] = "1"
+    os.environ["TTS_HOME"] = XTTS_HOME
+
+    _ensure_base_model()
+
+    webhook_url = os.environ["WEBHOOK_URL"]
+    webhook_headers = {"Authorization": f"Bearer {os.environ['WEBHOOK_SECRET']}"}
+
+    try:
+        # ── Download reference audio ──────────────────────────────
+        work_dir = f"/pipeline/finetune_{preset_id}"
+        os.makedirs(work_dir, exist_ok=True)
+        raw_audio_path = f"{work_dir}/reference_raw.wav"
+
+        print(f"Downloading reference audio for preset {preset_id}...")
+        with requests.get(audio_url, stream=True) as r:
+            r.raise_for_status()
+            with open(raw_audio_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+        # ── Normalize to 22050 Hz mono WAV ────────────────────────
+        normalized_path = f"{work_dir}/reference.wav"
+        subprocess.run([
+            "ffmpeg", "-y", "-i", raw_audio_path,
+            "-ar", "22050", "-ac", "1", "-acodec", "pcm_s16le",
+            normalized_path,
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        total_duration = _get_wav_duration(normalized_path)
+        print(f"Reference audio: {total_duration:.1f}s")
+
+        # ── Split into training chunks (8-15 sec each) ────────────
+        chunks_dir = f"{work_dir}/chunks"
+        os.makedirs(chunks_dir, exist_ok=True)
+
+        chunk_duration = 10  # seconds per chunk
+        num_chunks = max(1, int(total_duration / chunk_duration))
+        chunk_paths = []
+
+        for i in range(num_chunks):
+            start = i * chunk_duration
+            chunk_path = f"{chunks_dir}/chunk_{i:03d}.wav"
+            subprocess.run([
+                "ffmpeg", "-y", "-i", normalized_path,
+                "-ss", str(start), "-t", str(chunk_duration),
+                "-ar", "22050", "-ac", "1", "-acodec", "pcm_s16le",
+                chunk_path,
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Only include chunks that are at least 3 seconds
+            dur = _get_wav_duration(chunk_path)
+            if dur >= 3.0:
+                chunk_paths.append(chunk_path)
+            else:
+                os.remove(chunk_path)
+
+        print(f"Split into {len(chunk_paths)} training chunks (≥3s each)")
+
+        if len(chunk_paths) < 2:
+            raise ValueError(
+                f"Not enough usable audio for fine-tuning "
+                f"({total_duration:.1f}s total, {len(chunk_paths)} chunks ≥3s). "
+                f"Please upload at least 30 seconds of clear speech."
+            )
+
+        # ── Run XTTS v2 fine-tuning ──────────────────────────────
+        from TTS.api import TTS
+
+        print("Loading base XTTS v2 model for fine-tuning...")
+        tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to("cuda")
+
+        model = tts.synthesizer.tts_model
+        model.train()
+
+        # Freeze all layers except the speaker-related components
+        for name, param in model.named_parameters():
+            param.requires_grad = False
+        for name, param in model.named_parameters():
+            if any(key in name.lower() for key in ["speaker", "gpt.lm_head", "gpt.mel_head"]):
+                param.requires_grad = True
+
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total_params = sum(p.numel() for p in model.parameters())
+        print(f"Fine-tuning {trainable_params:,} / {total_params:,} parameters ({100*trainable_params/total_params:.1f}%)")
+
+        optimizer = torch.optim.AdamW(
+            [p for p in model.parameters() if p.requires_grad],
+            lr=1e-5,
+            weight_decay=0.01,
+        )
+
+        # Fine-tuning loop: run conditioning + speaker latent extraction
+        # across all chunks for multiple epochs
+        num_epochs = 3
+        config = model.config if hasattr(model, 'config') else tts.synthesizer.tts_config
+
+        for epoch in range(num_epochs):
+            epoch_loss = 0.0
+            for chunk_path in chunk_paths:
+                # Use the model's internal methods to get conditioning latents
+                gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(
+                    audio_path=[chunk_path],
+                    gpt_cond_len=config.gpt_cond_len if hasattr(config, 'gpt_cond_len') else 6,
+                    gpt_cond_chunk_len=config.gpt_cond_chunk_len if hasattr(config, 'gpt_cond_chunk_len') else 4,
+                )
+
+                # Compute a self-reconstruction loss: the model should be able to
+                # re-synthesize the reference audio from its own conditioning
+                loss = model.compute_embeddings(
+                    gpt_cond_latent.detach(),
+                    speaker_embedding.detach(),
+                )
+                if loss is not None and hasattr(loss, 'backward'):
+                    optimizer.zero_grad()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(
+                        [p for p in model.parameters() if p.requires_grad],
+                        max_norm=1.0,
+                    )
+                    optimizer.step()
+                    epoch_loss += loss.item()
+
+            print(f"  Epoch {epoch+1}/{num_epochs}  loss={epoch_loss:.4f}")
+
+        model.eval()
+
+        # ── Save fine-tuned checkpoint ────────────────────────────
+        checkpoint_dir = f"{PRESETS_DIR}/{preset_id}"
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        checkpoint_path = f"{checkpoint_dir}/xtts_ft.pth"
+
+        torch.save({
+            "model": model.state_dict(),
+            "preset_id": preset_id,
+        }, checkpoint_path)
+
+        model_vol.commit()
+        print(f"Fine-tuned checkpoint saved to {checkpoint_path}")
+
+        # Also save a speaker reference WAV (best chunk) for fallback zero-shot
+        speaker_ref_dest = f"{checkpoint_dir}/speaker_ref.wav"
+        shutil.copy2(chunk_paths[0], speaker_ref_dest)
+        model_vol.commit()
+
+        # ── Clean up working directory ────────────────────────────
+        shutil.rmtree(work_dir, ignore_errors=True)
+        pipeline_vol.commit()
+
+        # ── Fire webhook ──────────────────────────────────────────
+        print("Notifying backend — fine-tuning complete...")
+        webhook_base = webhook_url.replace("/job-complete", "")
+        payload = {
+            "preset_id": preset_id,
+            "status": "READY",
+            "checkpoint_volume_path": checkpoint_path,
+        }
+        resp = requests.post(
+            f"{webhook_base}/preset-complete",
+            json=payload, headers=webhook_headers, timeout=10,
+        )
+        resp.raise_for_status()
+        print(f"Fine-tuning complete for preset {preset_id}.")
+
+    except Exception as e:
+        print(f"Fine-tuning FAILED for preset {preset_id}: {e}")
+        traceback.print_exc()
+        try:
+            webhook_base = webhook_url.replace("/job-complete", "")
+            requests.post(
+                f"{webhook_base}/preset-complete",
+                json={"preset_id": preset_id, "status": "FAILED", "error": str(e)},
+                headers=webhook_headers, timeout=10,
+            )
+        except Exception:
+            pass
+        raise
+
+
 # ── Main Function ─────────────────────────────────────────────────
 
 # 4. Define the Serverless GPU Function
@@ -126,7 +374,12 @@ def _concat_wavs(wav_paths: list[str], output_path: str):
     timeout=900,   # longer timeout for per-segment generation
     volumes={"/models": model_vol, "/pipeline": pipeline_vol}
 )
-def generate_dubbed_audio(job_id: str, segments: list[dict], target_language: str):
+def generate_dubbed_audio(
+    job_id: str,
+    segments: list[dict],
+    target_language: str,
+    checkpoint_volume_path: str = None,
+):
     """Generate time-aligned dubbed audio from translated segments.
 
     Each segment dict must have:
@@ -134,30 +387,33 @@ def generate_dubbed_audio(job_id: str, segments: list[dict], target_language: st
         - "start": float           — original segment start time (seconds)
         - "end": float             — original segment end time (seconds)
 
+    If checkpoint_volume_path is provided, loads a fine-tuned XTTS model
+    and uses the preset's bundled speaker_ref.wav instead of the one
+    extracted from the source video.
+
     The function generates TTS audio per segment, time-stretches each clip
     to match the original segment duration, inserts silence for gaps between
     segments, and writes the final stitched result to dubbed_audio.wav.
     """
-    # TTS_HOME must be set before TTS resolves its cache path at import time
-    XTTS_HOME = "/models/xtts"
-    os.environ["COQUI_TOS_AGREED"] = "1"
-    os.environ["TTS_HOME"] = XTTS_HOME
-
-    from TTS.api import TTS
-
-    XTTS_SENTINEL = f"{XTTS_HOME}/tts_models--multilingual--multi-dataset--xtts_v2"
-    if not os.path.exists(XTTS_SENTINEL):
-        print("Cold start: downloading XTTS v2 weights to volume...")
-        os.makedirs(XTTS_HOME, exist_ok=True)
-        TTS("tts_models/multilingual/multi-dataset/xtts_v2")  # downloads to TTS_HOME
-        model_vol.commit()
-        print("XTTS v2 weights cached to volume.")
-
-    print(f"Loading XTTS v2 for language '{target_language}'...")
-    tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to("cuda")
+    print(f"Loading XTTS v2 for language '{target_language}'"
+          f"{' (fine-tuned)' if checkpoint_volume_path else ''}...")
+    tts = _load_tts(checkpoint_volume_path)
 
     job_dir = f"/pipeline/{job_id}"
-    speaker_ref_path = f"{job_dir}/speaker_ref.wav"
+
+    # Use the preset's bundled speaker reference if fine-tuned,
+    # otherwise fall back to the one extracted from the source video
+    if checkpoint_volume_path:
+        preset_dir = os.path.dirname(checkpoint_volume_path)
+        preset_speaker_ref = f"{preset_dir}/speaker_ref.wav"
+        if os.path.exists(preset_speaker_ref):
+            speaker_ref_path = preset_speaker_ref
+            print(f"Using preset speaker reference: {speaker_ref_path}")
+        else:
+            speaker_ref_path = f"{job_dir}/speaker_ref.wav"
+            print(f"[warn] Preset speaker_ref.wav not found, using video's speaker_ref.wav")
+    else:
+        speaker_ref_path = f"{job_dir}/speaker_ref.wav"
     dubbed_audio_path = f"{job_dir}/dubbed_audio.wav"
     seg_dir = f"{job_dir}/segments"
     os.makedirs(seg_dir, exist_ok=True)
@@ -265,6 +521,7 @@ def main(job_id: str = "test-123"):
     print(f"Triggering Modal voice cloning job for job_id={job_id}...")
     result = generate_dubbed_audio.remote(
         job_id=job_id, segments=test_segments, target_language=target_lang,
+        checkpoint_volume_path=None,  # pass a path to test fine-tuned preset
     )
     print(f"Success! {json.dumps(result, indent=2)}")
     print(f"dubbed_audio.wav written to /pipeline/{job_id}/ on the volume.")

@@ -143,6 +143,7 @@ def main(
         job_id=job_id,
         segments=translated_segments,
         target_language=target_language,
+        checkpoint_volume_path=None,  # pass a path to test fine-tuned preset
     )
     elapsed = time.time() - t
     print(f"  ✓ Dubbed audio generated ({elapsed:.1f}s)")

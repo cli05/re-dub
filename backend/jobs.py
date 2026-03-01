@@ -19,13 +19,16 @@ async def create_job(user_id: str, file_key: str, project_id: str, target_langua
 
     video_url = generate_download_url(file_key, expires=7200)
 
-    # Look up checkpoint path for the voice preset (if any)
+    # Look up the checkpoint volume path if a preset was selected
     checkpoint_volume_path = None
     if voice_preset_id:
-        from presets import get_preset
-        preset = await get_preset(voice_preset_id, user_id)
+        preset = await fetch_one(
+            "SELECT checkpoint_volume_path, status FROM voice_presets "
+            "WHERE voice_preset_id = ? AND user_id = ?",
+            [voice_preset_id, user_id],
+        )
         if preset and preset.get("status") == "READY":
-            checkpoint_volume_path = preset.get("checkpoint_volume_path")
+            checkpoint_volume_path = preset["checkpoint_volume_path"]
 
     try:
         orchestrator_func = modal.Function.from_name("redub-orchestrator", "process_video")

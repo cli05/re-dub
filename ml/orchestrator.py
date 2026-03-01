@@ -26,7 +26,13 @@ orchestrator_image = (
     timeout=1800,  # 30 minutes to account for the entire pipeline
     volumes={"/pipeline": pipeline_vol}
 )
-def process_video(job_id: str, video_url: str, target_language: str):
+def process_video(
+    job_id: str,
+    video_url: str,
+    target_language: str,
+    voice_preset_id: str = None,
+    checkpoint_volume_path: str = None,
+):
     import boto3
     import requests
 
@@ -83,13 +89,15 @@ def process_video(job_id: str, video_url: str, target_language: str):
 
     # Step 4: Voice Cloning (XTTS) — per-segment with duration matching
     notify_step(4)
-    print("4. Cloning voice and generating per-segment dubbed audio with XTTS v2...")
+    preset_label = f" (preset={voice_preset_id})" if voice_preset_id else ""
+    print(f"4. Cloning voice and generating per-segment dubbed audio with XTTS v2{preset_label}...")
 
     xtts_func = modal.Function.from_name("redub-xtts", "generate_dubbed_audio")
     xtts_result = xtts_func.remote(
         job_id=job_id,
         segments=translated_segments,
         target_language=target_language,
+        checkpoint_volume_path=checkpoint_volume_path,
     )
     print(f"   XTTS result: {xtts_result}")
 
@@ -139,5 +147,6 @@ def main(job_id: str = "test-123"):
     target_lang = "es"  # ISO code for Spanish
 
     print("Triggering the grand orchestrator...")
-    result = process_video.remote(job_id, test_video_url, target_lang)
+    result = process_video.remote(job_id, test_video_url, target_lang,
+                                  voice_preset_id=None, checkpoint_volume_path=None)
     print(f"Final Output URL: {result['url']}")
