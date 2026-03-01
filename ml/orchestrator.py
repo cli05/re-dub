@@ -93,11 +93,11 @@ def process_video(job_id: str, video_url: str, target_language: str):
         target_language=target_language
     )
 
-    # Step 5: Visual Lip Sync (LatentSync)
+    # Step 5: Visual Lip Sync (MuseTalk)
     notify_step(5)
-    print("5. Syncing lip movements with LatentSync...")
-    latentsync_func = modal.Function.from_name("redub-latentsync", "sync_lip_movements")
-    final_video_bytes = latentsync_func.remote(job_id)
+    print("5. Syncing lip movements with MuseTalk...")
+    musetalk_func = modal.Function.from_name("redub-musetalk", "sync_lip_movements")
+    final_video_bytes = musetalk_func.remote(job_id)
 
     # Upload to Cloudflare R2
     print("6. Uploading to R2...")
