@@ -37,7 +37,7 @@ export default function PolyGlotDubs() {
 
   function handleCardClick(p) {
     if (p.status === "COMPLETED") {
-      navigate("/preview", { state: { downloadUrl: p.download_url } });
+      navigate("/preview", { state: { downloadUrl: p.download_url, job_id: p.job_id, target_language: p.target_language } });
     } else if (p.status === "PROCESSING" || p.status === "PENDING") {
       navigate("/loading", { state: { job_id: p.job_id } });
     }
@@ -51,18 +51,6 @@ export default function PolyGlotDubs() {
         {/* Controls */}
         <div style={styles.toolbar}>
           <div style={styles.controls}>
-            <button style={styles.controlBtn}>
-              Language
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M3 6h18M7 12h10M11 18h2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </button>
-            <button style={styles.controlBtn}>
-              Sort: Newest
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M3 6h18M7 12h10M11 18h2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </button>
             <div style={styles.viewToggle}>
               {["grid", "list"].map(v => (
                 <button
@@ -101,21 +89,6 @@ export default function PolyGlotDubs() {
           </div>
         )}
       </main>
-
-      {/* Footer */}
-      <footer style={styles.footer}>
-        <div style={{ display: "flex", gap: 24 }}>
-          {["View Docs", "Terms of Service", "Support"].map(l => (
-            <a key={l} href="#" style={styles.footerLink}>{l}</a>
-          ))}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={styles.statusDot} />
-          <span style={styles.footerText}>System Operational</span>
-          <span style={styles.footerDivider}>|</span>
-          <span style={styles.footerText}>© 2024 Redub</span>
-        </div>
-      </footer>
     </div>
   );
 }
