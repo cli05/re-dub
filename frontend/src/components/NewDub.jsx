@@ -231,9 +231,9 @@ export default function NewDub() {
               <path d="M12 16v-4M12 8h.01" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             <span style={styles.formatText}>
-              Supported formats: <strong style={{ color: "rgba(255,255,255,0.65)" }}>MP4, MOV, AVI, MKV</strong>
-              <span style={styles.formatDot}>·</span>
-              Max file size: <strong style={{ color: "rgba(255,255,255,0.65)" }}>500MB</strong>
+              Supported formats: <strong style={{ color: "rgba(255,255,255,0.65)" }}>MP4</strong>
+              {/*<span style={styles.formatDot}>·</span>*/}
+              {/*Max file size: <strong style={{ color: "rgba(255,255,255,0.65)" }}>500MB</strong>*/}
             </span>
           </div>
 
