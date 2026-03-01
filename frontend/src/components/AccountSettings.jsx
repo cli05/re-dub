@@ -288,33 +288,33 @@ export default function AccountSettings() {
         </SectionCard>
 
         {/* Preferences Section */}
-        <SectionCard
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="3" stroke="#00e5a0" strokeWidth="2"/>
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          }
-          title="Preferences Section"
-        >
-          <Field label="Preferred Target Language">
-            <p style={s.fieldHint}>This will be the default output language for your new dubbing projects.</p>
-            <div style={s.selectWrap}>
-              <select
-                value={language}
-                onChange={e => setLanguage(e.target.value)}
-                style={s.select}
-              >
-                {LANGUAGES.map(l => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={s.selectChevron}>
-                <path d="M6 9l6 6 6-6" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </div>
-          </Field>
-        </SectionCard>
+        {/*<SectionCard*/}
+        {/*  icon={*/}
+        {/*    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">*/}
+        {/*      <circle cx="12" cy="12" r="3" stroke="#00e5a0" strokeWidth="2"/>*/}
+        {/*      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>*/}
+        {/*    </svg>*/}
+        {/*  }*/}
+        {/*  title="Preferences Section"*/}
+        {/*>*/}
+        {/*  <Field label="Preferred Target Language">*/}
+        {/*    <p style={s.fieldHint}>This will be the default output language for your new dubbing projects.</p>*/}
+        {/*    <div style={s.selectWrap}>*/}
+        {/*      <select*/}
+        {/*        value={language}*/}
+        {/*        onChange={e => setLanguage(e.target.value)}*/}
+        {/*        style={s.select}*/}
+        {/*      >*/}
+        {/*        {LANGUAGES.map(l => (*/}
+        {/*          <option key={l} value={l}>{l}</option>*/}
+        {/*        ))}*/}
+        {/*      </select>*/}
+        {/*      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={s.selectChevron}>*/}
+        {/*        <path d="M6 9l6 6 6-6" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"/>*/}
+        {/*      </svg>*/}
+        {/*    </div>*/}
+        {/*  </Field>*/}
+        {/*</SectionCard>*/}
 
         {/* Voice Presets */}
         <SectionCard
