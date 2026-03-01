@@ -135,22 +135,19 @@ def main(
         print(f"      [{seg['start']:.1f}s-{seg['end']:.1f}s] {seg['original_text'].strip()}")
         print(f"      → {seg['translated_text'].strip()}")
 
-    # ── Step 3: Voice Cloning (XTTS) ──────────────────────────────
-    full_translated_text = " ".join(
-        [seg["translated_text"] for seg in translated_segments]
-    )
-    # Map language name → 2-letter ISO code for XTTS
-    lang_code = target_language[:2].lower()
-    print(f"\n▶ Step 3/4 — Voice cloning via XTTS (lang={lang_code})...")
+    # ── Step 3: Voice Cloning (XTTS) — per-segment with duration matching ──
+    print(f"\n▶ Step 3/4 — Per-segment voice cloning via XTTS (lang={target_language})...")
     t = time.time()
     xtts_func = modal.Function.from_name("redub-xtts", "generate_dubbed_audio")
-    xtts_func.remote(
+    xtts_result = xtts_func.remote(
         job_id=job_id,
-        text=full_translated_text,
-        target_language=lang_code,
+        segments=translated_segments,
+        target_language=target_language,
+        checkpoint_volume_path=None,  # pass a path to test fine-tuned preset
     )
     elapsed = time.time() - t
     print(f"  ✓ Dubbed audio generated ({elapsed:.1f}s)")
+    print(f"    Result: {xtts_result}")
     print(f"    Written to volume: /pipeline/{job_id}/dubbed_audio.wav")
 
     # ── Step 4: Lip Sync (MuseTalk on H100) ──────────────────────

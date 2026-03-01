@@ -27,3 +27,19 @@ CREATE TABLE IF NOT EXISTS jobs (
 -- ALTER TABLE jobs ADD COLUMN project_name TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
+
+CREATE TABLE IF NOT EXISTS voice_presets (
+    voice_preset_id TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    name            TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'PENDING',
+    audio_key       TEXT NOT NULL,
+    checkpoint_volume_path TEXT,
+    duration_sec    REAL,
+    created_at      TEXT NOT NULL,
+    completed_at    TEXT,
+    error           TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_voice_presets_user_id ON voice_presets(user_id);

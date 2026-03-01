@@ -26,7 +26,13 @@ orchestrator_image = (
     timeout=1800,  # 30 minutes to account for the entire pipeline
     volumes={"/pipeline": pipeline_vol}
 )
-def process_video(job_id: str, video_url: str, target_language: str):
+def process_video(
+    job_id: str,
+    video_url: str,
+    target_language: str,
+    voice_preset_id: str = None,
+    checkpoint_volume_path: str = None,
+):
     import boto3
     import requests
 
@@ -81,17 +87,19 @@ def process_video(job_id: str, video_url: str, target_language: str):
         glossary={"Redub": "Redub"}
     )
 
-    # Step 4: Voice Cloning (XTTS)
+    # Step 4: Voice Cloning (XTTS) — per-segment with duration matching
     notify_step(4)
-    print("4. Cloning voice and generating dubbed audio with XTTS v2...")
-    full_translated_text = " ".join([seg["translated_text"] for seg in translated_segments])
+    preset_label = f" (preset={voice_preset_id})" if voice_preset_id else ""
+    print(f"4. Cloning voice and generating per-segment dubbed audio with XTTS v2{preset_label}...")
 
     xtts_func = modal.Function.from_name("redub-xtts", "generate_dubbed_audio")
-    xtts_func.remote(
+    xtts_result = xtts_func.remote(
         job_id=job_id,
-        text=full_translated_text,
-        target_language=target_language
+        segments=translated_segments,
+        target_language=target_language,
+        checkpoint_volume_path=checkpoint_volume_path,
     )
+    print(f"   XTTS result: {xtts_result}")
 
     # Step 5: Visual Lip Sync (MuseTalk)
     notify_step(5)
@@ -120,10 +128,10 @@ def process_video(job_id: str, video_url: str, target_language: str):
     )
 
     # Fire completion webhook to FastAPI
-    print("7. Notifying FastAPI backend — pipeline complete...")
-    payload = {"job_id": job_id, "status": "COMPLETED", "output_key": output_key}
-    response = requests.post(webhook_url, json=payload, headers=webhook_headers)
-    response.raise_for_status()
+    # print("7. Notifying FastAPI backend — pipeline complete...")
+    # payload = {"job_id": job_id, "status": "COMPLETED", "output_key": output_key}
+    # response = requests.post(webhook_url, json=payload, headers=webhook_headers)
+    # response.raise_for_status()
 
     print("--- Pipeline Complete ---")
     return {"status": "success", "output_key": output_key}
@@ -139,5 +147,6 @@ def main(job_id: str = "test-123"):
     target_lang = "es"  # ISO code for Spanish
 
     print("Triggering the grand orchestrator...")
-    result = process_video.remote(job_id, test_video_url, target_lang)
+    result = process_video.remote(job_id, test_video_url, target_lang,
+                                  voice_preset_id=None, checkpoint_volume_path=None)
     print(f"Final Output URL: {result['url']}")

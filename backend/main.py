@@ -8,9 +8,12 @@ from pydantic import BaseModel, EmailStr
 
 load_dotenv()
 
-from r2 import upload_file, generate_upload_url, generate_download_url, delete_file, list_files, object_exists
+from r2 import upload_file, generate_upload_url, generate_download_url, delete_file, list_files, object_exists, get_object_json
 from accounts import create_user, get_user_by_email, update_user
+
 from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step, rename_job
+from presets import create_preset, get_preset, list_presets, complete_preset, fail_preset, delete_preset
+
 from auth import hash_password, verify_password, create_access_token, get_current_user
 
 app = FastAPI()
@@ -179,6 +182,7 @@ class DubRequest(BaseModel):
     file_key: str        # R2 key of the uploaded source video
     project_id: str      # Used to namespace the job_id
     target_language: str # e.g. "Spanish", "French"
+    voice_preset_id: str | None = None  # Optional fine-tuned voice preset
 
 
 @app.post("/api/dub")
@@ -192,6 +196,7 @@ async def start_dub(
         file_key=req.file_key,
         project_id=req.project_id,
         target_language=req.target_language,
+        voice_preset_id=req.voice_preset_id,
     )
     return {"job_id": job_id, "status": "PENDING"}
 
@@ -269,6 +274,94 @@ async def list_projects(current_user: dict = Depends(get_current_user)):
 
 
 # ---------------------------------------------------------------------------
+# Voice Preset endpoints (all require auth)
+# ---------------------------------------------------------------------------
+
+async def _check_preset_r2_fallback(preset: dict) -> dict:
+    """Check R2 for a completion marker when the webhook never arrived."""
+    preset_id = preset["voice_preset_id"]
+    marker_key = f"presets/{preset_id}/done.json"
+    marker = get_object_json(marker_key)
+    if marker and marker.get("status") == "READY":
+        checkpoint_path = marker.get("checkpoint_volume_path", "")
+        await complete_preset(preset_id, checkpoint_path)
+        preset["status"] = "READY"
+        preset["checkpoint_volume_path"] = checkpoint_path
+    return preset
+
+class CreatePresetRequest(BaseModel):
+    name: str
+    audio_key: str       # R2 key of the uploaded reference audio
+    duration_sec: float  # Duration of the uploaded audio in seconds
+
+
+@app.post("/api/presets", status_code=201)
+async def create_voice_preset(
+    req: CreatePresetRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload reference audio and kick off XTTS fine-tuning."""
+    if req.duration_sec < 30:
+        raise HTTPException(status_code=400, detail="Audio must be at least 30 seconds long")
+    preset = await create_preset(
+        user_id=current_user["user_id"],
+        name=req.name,
+        audio_key=req.audio_key,
+        duration_sec=req.duration_sec,
+    )
+    return preset
+
+
+@app.get("/api/presets")
+async def list_voice_presets(current_user: dict = Depends(get_current_user)):
+    """List all voice presets for the current user."""
+    presets = await list_presets(current_user["user_id"])
+    # Check R2 fallback for any presets still pending (webhook may not have arrived)
+    updated = []
+    for p in presets:
+        if p["status"] in ("PENDING", "PROCESSING"):
+            p = await _check_preset_r2_fallback(p)
+        updated.append(p)
+    return {"presets": updated}
+
+
+@app.get("/api/presets/{preset_id}")
+async def get_voice_preset(
+    preset_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get the status of a single voice preset."""
+    preset = await get_preset(preset_id, current_user["user_id"])
+    if preset is None:
+        raise HTTPException(status_code=404, detail="Preset not found")
+
+    # If the webhook never arrived, check R2 for a completion marker
+    if preset["status"] in ("PENDING", "PROCESSING"):
+        preset = await _check_preset_r2_fallback(preset)
+
+    return preset
+
+
+@app.delete("/api/presets/{preset_id}")
+async def remove_voice_preset(
+    preset_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete a voice preset and its associated audio/checkpoint."""
+    preset = await get_preset(preset_id, current_user["user_id"])
+    if preset is None:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    # Clean up R2 audio file
+    if preset.get("audio_key"):
+        try:
+            delete_file(preset["audio_key"])
+        except Exception:
+            pass
+    await delete_preset(preset_id, current_user["user_id"])
+    return {"deleted": preset_id}
+
+
+# ---------------------------------------------------------------------------
 # Webhook — called by the Modal orchestrator, not by the frontend
 # ---------------------------------------------------------------------------
 
@@ -311,5 +404,30 @@ async def job_complete_webhook(
         await complete_job(payload.job_id, payload.output_key)
     else:
         await fail_job(payload.job_id, payload.error or "Unknown error")
+
+    return {"received": True}
+
+
+class PresetWebhookPayload(BaseModel):
+    preset_id: str
+    status: str                    # "READY" or "FAILED"
+    checkpoint_volume_path: str | None = None
+    error: str | None = None
+
+
+@app.post("/api/webhook/preset-complete")
+async def preset_complete_webhook(
+    payload: PresetWebhookPayload,
+    authorization: str = Header(None),
+):
+    """Receive completion callback from the XTTS fine-tuning job."""
+    secret = os.getenv("WEBHOOK_SECRET")
+    if secret and authorization != f"Bearer {secret}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if payload.status == "READY" and payload.checkpoint_volume_path:
+        await complete_preset(payload.preset_id, payload.checkpoint_volume_path)
+    else:
+        await fail_preset(payload.preset_id, payload.error or "Unknown error")
 
     return {"received": True}
