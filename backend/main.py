@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr
 
 load_dotenv()
 
-from r2 import upload_file, generate_upload_url, generate_download_url, delete_file, list_files, object_exists
+from r2 import upload_file, generate_upload_url, generate_download_url, delete_file, list_files, object_exists, get_object_json
 from accounts import create_user, get_user_by_email, update_user
 from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step
 from presets import create_preset, get_preset, list_presets, complete_preset, fail_preset, delete_preset
@@ -243,6 +243,18 @@ async def list_projects(current_user: dict = Depends(get_current_user)):
 # Voice Preset endpoints (all require auth)
 # ---------------------------------------------------------------------------
 
+async def _check_preset_r2_fallback(preset: dict) -> dict:
+    """Check R2 for a completion marker when the webhook never arrived."""
+    preset_id = preset["voice_preset_id"]
+    marker_key = f"presets/{preset_id}/done.json"
+    marker = get_object_json(marker_key)
+    if marker and marker.get("status") == "READY":
+        checkpoint_path = marker.get("checkpoint_volume_path", "")
+        await complete_preset(preset_id, checkpoint_path)
+        preset["status"] = "READY"
+        preset["checkpoint_volume_path"] = checkpoint_path
+    return preset
+
 class CreatePresetRequest(BaseModel):
     name: str
     audio_key: str       # R2 key of the uploaded reference audio
@@ -270,7 +282,13 @@ async def create_voice_preset(
 async def list_voice_presets(current_user: dict = Depends(get_current_user)):
     """List all voice presets for the current user."""
     presets = await list_presets(current_user["user_id"])
-    return {"presets": presets}
+    # Check R2 fallback for any presets still pending (webhook may not have arrived)
+    updated = []
+    for p in presets:
+        if p["status"] in ("PENDING", "PROCESSING"):
+            p = await _check_preset_r2_fallback(p)
+        updated.append(p)
+    return {"presets": updated}
 
 
 @app.get("/api/presets/{preset_id}")
@@ -282,6 +300,11 @@ async def get_voice_preset(
     preset = await get_preset(preset_id, current_user["user_id"])
     if preset is None:
         raise HTTPException(status_code=404, detail="Preset not found")
+
+    # If the webhook never arrived, check R2 for a completion marker
+    if preset["status"] in ("PENDING", "PROCESSING"):
+        preset = await _check_preset_r2_fallback(preset)
+
     return preset
 
 

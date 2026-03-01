@@ -56,3 +56,13 @@ def object_exists(key):
         return True
     except Exception:
         return False
+
+
+def get_object_json(key):
+    """Read a JSON object from R2. Returns parsed dict or None on failure."""
+    import json
+    try:
+        resp = s3.get_object(Bucket=BUCKET, Key=key)
+        return json.loads(resp["Body"].read().decode())
+    except Exception:
+        return None

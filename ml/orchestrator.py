@@ -128,10 +128,10 @@ def process_video(
     )
 
     # Fire completion webhook to FastAPI
-    print("7. Notifying FastAPI backend — pipeline complete...")
-    payload = {"job_id": job_id, "status": "COMPLETED", "output_key": output_key}
-    response = requests.post(webhook_url, json=payload, headers=webhook_headers)
-    response.raise_for_status()
+    # print("7. Notifying FastAPI backend — pipeline complete...")
+    # payload = {"job_id": job_id, "status": "COMPLETED", "output_key": output_key}
+    # response = requests.post(webhook_url, json=payload, headers=webhook_headers)
+    # response.raise_for_status()
 
     print("--- Pipeline Complete ---")
     return {"status": "success", "output_key": output_key}

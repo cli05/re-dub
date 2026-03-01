@@ -21,9 +21,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
--- Migration for existing databases:
--- ALTER TABLE jobs ADD COLUMN step INTEGER NOT NULL DEFAULT 0;
-
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
 
 CREATE TABLE IF NOT EXISTS voice_presets (

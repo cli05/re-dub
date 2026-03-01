@@ -22,6 +22,7 @@ xtts_image = (
         "torch<2.6.0",      # TTS 0.22.0 uses torch.load() without weights_only; PyTorch 2.6 changed the default to True, breaking checkpoint loading
         "torchaudio<2.6.0",
         "requests",
+        "boto3",
     )
 )
 
@@ -30,6 +31,11 @@ xtts_image = (
 # Acceptable stretch range — beyond this the audio sounds unnatural
 MIN_TEMPO = 0.5   # slowest (2× slower)
 MAX_TEMPO = 1.8   # fastest (1.8× faster)
+
+# How much of the time-stretch to actually apply (0.0 = none, 1.0 = full).
+# 0.5 means we meet the original timing halfway — noticeably aligned but
+# still natural-sounding. Go down for less stretching, up for tighter timing alignment
+STRETCH_ALPHA = 0.5
 
 SAMPLE_RATE = 22050  # XTTS v2 output sample rate
 NUM_CHANNELS = 1     # mono
@@ -141,7 +147,7 @@ def _ensure_base_model():
 
 
 def _load_tts(checkpoint_volume_path: str = None):
-    """Load XTTS v2, optionally from a fine-tuned checkpoint."""
+    """Load XTTS v2, optionally with pre-computed speaker conditioning latents."""
     os.environ["COQUI_TOS_AGREED"] = "1"
     os.environ["TTS_HOME"] = XTTS_HOME
 
@@ -150,15 +156,6 @@ def _load_tts(checkpoint_volume_path: str = None):
     from TTS.api import TTS
 
     tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to("cuda")
-
-    if checkpoint_volume_path and os.path.exists(checkpoint_volume_path):
-        import torch
-        print(f"Loading fine-tuned checkpoint from {checkpoint_volume_path}...")
-        checkpoint = torch.load(checkpoint_volume_path, map_location="cuda", weights_only=False)
-        tts.synthesizer.tts_model.load_state_dict(checkpoint["model"], strict=False)
-        print("Fine-tuned checkpoint loaded successfully.")
-    elif checkpoint_volume_path:
-        print(f"[warn] Checkpoint not found at {checkpoint_volume_path}, using base model.")
 
     return tts
 
@@ -169,21 +166,34 @@ def _load_tts(checkpoint_volume_path: str = None):
     image=xtts_image,
     gpu="H100",
     timeout=1800,   # 30 min — fine-tuning can be slow
-    secrets=[modal.Secret.from_name("backend-webhook-secret")],
+    secrets=[
+        modal.Secret.from_name("backend-webhook-secret"),
+        modal.Secret.from_name("redub-r2-secret"),
+    ],
     volumes={"/models": model_vol, "/pipeline": pipeline_vol},
 )
 def fine_tune_speaker(preset_id: str, audio_url: str):
-    """Fine-tune XTTS v2 on a user's reference audio for better voice cloning.
+    """Compute high-quality speaker conditioning latents from reference audio.
 
-    1. Downloads reference audio from R2 (via presigned URL)
-    2. Splits into 8-15 second training chunks
-    3. Runs XTTS v2 fine-tuning (speaker encoder + decoder)
-    4. Saves checkpoint to the model volume
-    5. Fires webhook to backend
+    XTTS v2's Xtts class has no training support (forward/train_step raise
+    NotImplementedError). Instead, we extract speaker conditioning latents
+    (gpt_cond_latent + speaker_embedding) from many audio chunks, average
+    them for robustness, and cache the result. At inference time we load
+    these pre-computed latents and pass them directly to the model, bypassing
+    the short 6-second speaker_ref.wav extraction and producing much more
+    consistent and higher-quality voice cloning.
+
+    Steps:
+        1. Download reference audio from R2 (via presigned URL)
+        2. Normalize to 22050 Hz mono WAV
+        3. Split into 8-15 second chunks
+        4. Extract gpt_cond_latent + speaker_embedding from each chunk
+        5. Average across all chunks for a robust speaker representation
+        6. Save latents + best speaker_ref.wav to volume
+        7. Fire webhook to backend
     """
     import requests
     import torch
-    import glob
     import shutil
     import traceback
 
@@ -219,7 +229,7 @@ def fine_tune_speaker(preset_id: str, audio_url: str):
         total_duration = _get_wav_duration(normalized_path)
         print(f"Reference audio: {total_duration:.1f}s")
 
-        # ── Split into training chunks (8-15 sec each) ────────────
+        # ── Split into conditioning chunks (8-15 sec each) ────────
         chunks_dir = f"{work_dir}/chunks"
         os.makedirs(chunks_dir, exist_ok=True)
 
@@ -243,115 +253,109 @@ def fine_tune_speaker(preset_id: str, audio_url: str):
             else:
                 os.remove(chunk_path)
 
-        print(f"Split into {len(chunk_paths)} training chunks (≥3s each)")
+        print(f"Split into {len(chunk_paths)} conditioning chunks (≥3s each)")
 
         if len(chunk_paths) < 2:
             raise ValueError(
-                f"Not enough usable audio for fine-tuning "
+                f"Not enough usable audio for speaker conditioning "
                 f"({total_duration:.1f}s total, {len(chunk_paths)} chunks ≥3s). "
                 f"Please upload at least 30 seconds of clear speech."
             )
 
-        # ── Run XTTS v2 fine-tuning ──────────────────────────────
+        # ── Extract conditioning latents from each chunk ──────────
         from TTS.api import TTS
 
-        print("Loading base XTTS v2 model for fine-tuning...")
+        print("Loading XTTS v2 for speaker conditioning extraction...")
         tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to("cuda")
-
         model = tts.synthesizer.tts_model
-        model.train()
 
-        # Freeze all layers except the speaker-related components
-        for name, param in model.named_parameters():
-            param.requires_grad = False
-        for name, param in model.named_parameters():
-            if any(key in name.lower() for key in ["speaker", "gpt.lm_head", "gpt.mel_head"]):
-                param.requires_grad = True
+        all_gpt_cond = []
+        all_speaker_emb = []
 
-        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        total_params = sum(p.numel() for p in model.parameters())
-        print(f"Fine-tuning {trainable_params:,} / {total_params:,} parameters ({100*trainable_params/total_params:.1f}%)")
+        for i, chunk_path in enumerate(chunk_paths):
+            print(f"  Extracting latents from chunk {i+1}/{len(chunk_paths)}...")
+            gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(
+                audio_path=[chunk_path],
+                gpt_cond_len=30,            # longer context = better quality
+                gpt_cond_chunk_len=4,
+            )
+            all_gpt_cond.append(gpt_cond_latent)
+            all_speaker_emb.append(speaker_embedding)
 
-        optimizer = torch.optim.AdamW(
-            [p for p in model.parameters() if p.requires_grad],
-            lr=1e-5,
-            weight_decay=0.01,
-        )
+        # ── Average latents across all chunks ─────────────────────
+        avg_gpt_cond = torch.mean(torch.stack(all_gpt_cond), dim=0)
+        avg_speaker_emb = torch.mean(torch.stack(all_speaker_emb), dim=0)
 
-        # Fine-tuning loop: run conditioning + speaker latent extraction
-        # across all chunks for multiple epochs
-        num_epochs = 3
-        config = model.config if hasattr(model, 'config') else tts.synthesizer.tts_config
+        print(f"Averaged conditioning latents from {len(chunk_paths)} chunks")
+        print(f"  gpt_cond_latent: {avg_gpt_cond.shape}")
+        print(f"  speaker_embedding: {avg_speaker_emb.shape}")
 
-        for epoch in range(num_epochs):
-            epoch_loss = 0.0
-            for chunk_path in chunk_paths:
-                # Use the model's internal methods to get conditioning latents
-                gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(
-                    audio_path=[chunk_path],
-                    gpt_cond_len=config.gpt_cond_len if hasattr(config, 'gpt_cond_len') else 6,
-                    gpt_cond_chunk_len=config.gpt_cond_chunk_len if hasattr(config, 'gpt_cond_chunk_len') else 4,
-                )
-
-                # Compute a self-reconstruction loss: the model should be able to
-                # re-synthesize the reference audio from its own conditioning
-                loss = model.compute_embeddings(
-                    gpt_cond_latent.detach(),
-                    speaker_embedding.detach(),
-                )
-                if loss is not None and hasattr(loss, 'backward'):
-                    optimizer.zero_grad()
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(
-                        [p for p in model.parameters() if p.requires_grad],
-                        max_norm=1.0,
-                    )
-                    optimizer.step()
-                    epoch_loss += loss.item()
-
-            print(f"  Epoch {epoch+1}/{num_epochs}  loss={epoch_loss:.4f}")
-
-        model.eval()
-
-        # ── Save fine-tuned checkpoint ────────────────────────────
+        # ── Save latents to volume ────────────────────────────────
         checkpoint_dir = f"{PRESETS_DIR}/{preset_id}"
         os.makedirs(checkpoint_dir, exist_ok=True)
-        checkpoint_path = f"{checkpoint_dir}/xtts_ft.pth"
+        latents_path = f"{checkpoint_dir}/speaker_latents.pth"
 
         torch.save({
-            "model": model.state_dict(),
+            "gpt_cond_latent": avg_gpt_cond.cpu(),
+            "speaker_embedding": avg_speaker_emb.cpu(),
+            "num_chunks": len(chunk_paths),
+            "total_duration": total_duration,
             "preset_id": preset_id,
-        }, checkpoint_path)
+        }, latents_path)
 
         model_vol.commit()
-        print(f"Fine-tuned checkpoint saved to {checkpoint_path}")
+        print(f"Speaker latents saved to {latents_path}")
 
-        # Also save a speaker reference WAV (best chunk) for fallback zero-shot
+        # Also save a long speaker reference WAV (the full normalized audio)
+        # as fallback and for future use
         speaker_ref_dest = f"{checkpoint_dir}/speaker_ref.wav"
-        shutil.copy2(chunk_paths[0], speaker_ref_dest)
+        shutil.copy2(normalized_path, speaker_ref_dest)
         model_vol.commit()
+
+        # ── Upload completion marker to R2 (webhook fallback) ──
+        import boto3 as _boto3
+        _s3 = _boto3.client(
+            "s3",
+            endpoint_url=f"https://{os.environ['ACCOUNT_ID']}.r2.cloudflarestorage.com",
+            aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+            region_name="auto",
+        )
+        marker_key = f"presets/{preset_id}/done.json"
+        marker_body = json.dumps({
+            "preset_id": preset_id,
+            "status": "READY",
+            "checkpoint_volume_path": latents_path,
+        })
+        _s3.put_object(
+            Bucket=os.environ["R2_BUCKET_NAME"],
+            Key=marker_key,
+            Body=marker_body.encode(),
+            ContentType="application/json",
+        )
+        print(f"Uploaded completion marker to R2: {marker_key}")
 
         # ── Clean up working directory ────────────────────────────
         shutil.rmtree(work_dir, ignore_errors=True)
         pipeline_vol.commit()
 
         # ── Fire webhook ──────────────────────────────────────────
-        print("Notifying backend — fine-tuning complete...")
-        webhook_base = webhook_url.replace("/job-complete", "")
-        payload = {
-            "preset_id": preset_id,
-            "status": "READY",
-            "checkpoint_volume_path": checkpoint_path,
-        }
-        resp = requests.post(
-            f"{webhook_base}/preset-complete",
-            json=payload, headers=webhook_headers, timeout=10,
-        )
-        resp.raise_for_status()
-        print(f"Fine-tuning complete for preset {preset_id}.")
+        # print("Notifying backend — speaker conditioning complete...")
+        # webhook_base = webhook_url.replace("/job-complete", "")
+        # payload = {
+        #     "preset_id": preset_id,
+        #     "status": "READY",
+        #     "checkpoint_volume_path": latents_path,
+        # }
+        # resp = requests.post(
+        #     f"{webhook_base}/preset-complete",
+        #     json=payload, headers=webhook_headers, timeout=10,
+        # )
+        # resp.raise_for_status()
+        print(f"Speaker conditioning complete for preset {preset_id}.")
 
     except Exception as e:
-        print(f"Fine-tuning FAILED for preset {preset_id}: {e}")
+        print(f"Speaker conditioning FAILED for preset {preset_id}: {e}")
         traceback.print_exc()
         try:
             webhook_base = webhook_url.replace("/job-complete", "")
@@ -396,24 +400,32 @@ def generate_dubbed_audio(
     segments, and writes the final stitched result to dubbed_audio.wav.
     """
     print(f"Loading XTTS v2 for language '{target_language}'"
-          f"{' (fine-tuned)' if checkpoint_volume_path else ''}...")
+          f"{' (preset)' if checkpoint_volume_path else ''}...")
     tts = _load_tts(checkpoint_volume_path)
 
     job_dir = f"/pipeline/{job_id}"
 
-    # Use the preset's bundled speaker reference if fine-tuned,
-    # otherwise fall back to the one extracted from the source video
-    if checkpoint_volume_path:
+    # Load pre-computed speaker latents if a preset is available,
+    # otherwise we'll use speaker_wav for zero-shot conditioning
+    import torch
+    preset_latents = None
+    speaker_ref_path = f"{job_dir}/speaker_ref.wav"
+
+    if checkpoint_volume_path and os.path.exists(checkpoint_volume_path):
+        print(f"Loading pre-computed speaker latents from {checkpoint_volume_path}...")
+        preset_latents = torch.load(checkpoint_volume_path, map_location="cuda", weights_only=False)
+        print(f"  gpt_cond_latent: {preset_latents['gpt_cond_latent'].shape}")
+        print(f"  speaker_embedding: {preset_latents['speaker_embedding'].shape}")
+        print(f"  (averaged from {preset_latents.get('num_chunks', '?')} chunks, "
+              f"{preset_latents.get('total_duration', '?')}s total)")
+        # Also use the preset's long speaker_ref.wav as fallback
         preset_dir = os.path.dirname(checkpoint_volume_path)
         preset_speaker_ref = f"{preset_dir}/speaker_ref.wav"
         if os.path.exists(preset_speaker_ref):
             speaker_ref_path = preset_speaker_ref
-            print(f"Using preset speaker reference: {speaker_ref_path}")
-        else:
-            speaker_ref_path = f"{job_dir}/speaker_ref.wav"
-            print(f"[warn] Preset speaker_ref.wav not found, using video's speaker_ref.wav")
-    else:
-        speaker_ref_path = f"{job_dir}/speaker_ref.wav"
+    elif checkpoint_volume_path:
+        print(f"[warn] Latents not found at {checkpoint_volume_path}, using zero-shot from video.")
+
     dubbed_audio_path = f"{job_dir}/dubbed_audio.wav"
     seg_dir = f"{job_dir}/segments"
     os.makedirs(seg_dir, exist_ok=True)
@@ -449,17 +461,35 @@ def generate_dubbed_audio(
 
         # ── Generate raw TTS for this segment ─────────────────────
         raw_path = f"{seg_dir}/raw_{i:04d}.wav"
-        tts.tts_to_file(
-            text=text,
-            speaker_wav=speaker_ref_path,
-            language=lang_code,
-            file_path=raw_path,
-        )
+
+        if preset_latents is not None:
+            # Use pre-computed speaker conditioning latents (higher quality)
+            import torchaudio
+            model = tts.synthesizer.tts_model
+            out = model.inference(
+                text=text,
+                language=lang_code,
+                gpt_cond_latent=preset_latents["gpt_cond_latent"].to("cuda"),
+                speaker_embedding=preset_latents["speaker_embedding"].to("cuda"),
+                temperature=0.7,
+            )
+            wav_tensor = torch.tensor(out["wav"]).unsqueeze(0)
+            torchaudio.save(raw_path, wav_tensor, SAMPLE_RATE)
+        else:
+            # Zero-shot: use speaker_wav file
+            tts.tts_to_file(
+                text=text,
+                speaker_wav=speaker_ref_path,
+                language=lang_code,
+                file_path=raw_path,
+            )
         raw_duration = _get_wav_duration(raw_path)
 
         # ── Time-stretch to match original segment duration ───────
         if target_duration > 0.05 and raw_duration > 0.05:
-            tempo = raw_duration / target_duration  # >1 = speed up, <1 = slow down
+            raw_tempo = raw_duration / target_duration  # >1 = speed up, <1 = slow down
+            # Dampen: blend toward 1.0 so we don't fully distort the voice
+            tempo = 1.0 + STRETCH_ALPHA * (raw_tempo - 1.0)
             clamped_tempo = max(MIN_TEMPO, min(MAX_TEMPO, tempo))
 
             stretched_path = f"{seg_dir}/stretched_{i:04d}.wav"
@@ -469,8 +499,8 @@ def generate_dubbed_audio(
             print(
                 f"  Segment {i}: \"{text[:40]}...\" "
                 f"target={target_duration:.2f}s  raw={raw_duration:.2f}s  "
-                f"tempo={tempo:.2f} (clamped={clamped_tempo:.2f})  "
-                f"final={actual_duration:.2f}s"
+                f"raw_tempo={raw_tempo:.2f}  applied={clamped_tempo:.2f} "
+                f"(alpha={STRETCH_ALPHA})  final={actual_duration:.2f}s"
             )
             pieces.append(stretched_path)
         else:
