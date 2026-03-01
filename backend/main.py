@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr
 
 load_dotenv()
 
-from r2 import upload_file, generate_upload_url, generate_download_url, delete_file, list_files
+from r2 import upload_file, generate_upload_url, generate_download_url, delete_file, list_files, object_exists
 from accounts import create_user, get_user_by_email, update_user
 from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step
 from auth import hash_password, verify_password, create_access_token, get_current_user
@@ -205,6 +205,15 @@ async def get_dub_status(
     job = await get_job(job_id, current_user["user_id"])
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # If the webhook never arrived (e.g. local dev), check R2 directly
+    if job["status"] in ("PENDING", "PROCESSING"):
+        output_key = f"projects/{job_id}/dubbed_output.mp4"
+        if object_exists(output_key):
+            await complete_job(job_id, output_key)
+            job["status"] = "COMPLETED"
+            job["output_key"] = output_key
+
     response = {"job_id": job_id, "status": job["status"], "step": job.get("step", 0)}
     if job["status"] == "COMPLETED":
         response["output_key"] = job["output_key"]
@@ -218,7 +227,13 @@ async def get_dub_status(
 async def list_projects(current_user: dict = Depends(get_current_user)):
     """Return all dubbing jobs for the current user (used by the Dashboard)."""
     jobs = await list_jobs(current_user["user_id"])
-    return {"projects": jobs}
+    result = []
+    for job in jobs:
+        j = dict(job)
+        if j.get("status") == "COMPLETED" and j.get("output_key"):
+            j["download_url"] = generate_download_url(j["output_key"])
+        result.append(j)
+    return {"projects": result}
 
 
 # ---------------------------------------------------------------------------

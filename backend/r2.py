@@ -47,3 +47,12 @@ def list_files(prefix):
     """List all files in R2 under a given prefix."""
     resp = s3.list_objects_v2(Bucket=BUCKET, Prefix=prefix)
     return resp.get("Contents", [])
+
+
+def object_exists(key):
+    """Return True if the object exists in R2."""
+    try:
+        s3.head_object(Bucket=BUCKET, Key=key)
+        return True
+    except Exception:
+        return False
