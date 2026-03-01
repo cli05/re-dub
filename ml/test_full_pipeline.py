@@ -1,7 +1,7 @@
 """
 Test script: runs the full dubbing pipeline end-to-end WITHOUT backend dependencies.
 
-Chains: Whisper → Translation → XTTS → LatentSync
+Chains: Whisper → Translation → XTTS → MuseTalk
 Skips:  R2 upload, webhook callback
 
 Setup:
@@ -12,7 +12,7 @@ Setup:
         modal deploy ml/app_whisper.py
         modal deploy ml/app_translate.py
         modal deploy ml/app_xtts.py
-        modal deploy ml/app_latentsync.py
+        modal deploy ml/app_musetalk.py
 
 Usage:
     modal run ml/test_full_pipeline.py
@@ -93,7 +93,7 @@ def prepare_source_files(job_id: str):
 @app.local_entrypoint()
 def main(
     job_id: str = "test-full",
-    target_language: str = "es",
+    target_language: str = "zh-cn",
 ):
     overall_start = time.time()
 
@@ -153,11 +153,11 @@ def main(
     print(f"  ✓ Dubbed audio generated ({elapsed:.1f}s)")
     print(f"    Written to volume: /pipeline/{job_id}/dubbed_audio.wav")
 
-    # ── Step 4: Lip Sync (LatentSync on A100) ─────────────────────
-    print(f"\n▶ Step 4/4 — Lip-syncing video (LatentSync / A100)...")
+    # ── Step 4: Lip Sync (MuseTalk on H100) ──────────────────────
+    print(f"\n▶ Step 4/4 — Lip-syncing video (MuseTalk / H100)...")
     t = time.time()
-    latentsync_func = modal.Function.from_name("redub-latentsync", "sync_lip_movements")
-    final_video_bytes = latentsync_func.remote(job_id)
+    musetalk_func = modal.Function.from_name("redub-musetalk", "sync_lip_movements")
+    final_video_bytes = musetalk_func.remote(job_id)
     elapsed = time.time() - t
     print(f"  ✓ Lip sync complete ({elapsed:.1f}s)")
     print(f"    Output size: {len(final_video_bytes) / (1024 * 1024):.2f} MB")
@@ -165,7 +165,7 @@ def main(
     # ── Save output locally ────────────────────────────────────────
     output_dir = os.path.join(os.path.dirname(__file__), "tmp")
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"{job_id}_dubbed_output.mp4")
+    output_path = os.path.join(output_dir, f"{job_id}_dubbed_output_{target_language}.mp4")
     with open(output_path, "wb") as f:
         f.write(final_video_bytes)
 
