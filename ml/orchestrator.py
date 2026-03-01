@@ -81,17 +81,17 @@ def process_video(job_id: str, video_url: str, target_language: str):
         glossary={"Redub": "Redub"}
     )
 
-    # Step 4: Voice Cloning (XTTS)
+    # Step 4: Voice Cloning (XTTS) — per-segment with duration matching
     notify_step(4)
-    print("4. Cloning voice and generating dubbed audio with XTTS v2...")
-    full_translated_text = " ".join([seg["translated_text"] for seg in translated_segments])
+    print("4. Cloning voice and generating per-segment dubbed audio with XTTS v2...")
 
     xtts_func = modal.Function.from_name("redub-xtts", "generate_dubbed_audio")
-    xtts_func.remote(
+    xtts_result = xtts_func.remote(
         job_id=job_id,
-        text=full_translated_text,
-        target_language=target_language
+        segments=translated_segments,
+        target_language=target_language,
     )
+    print(f"   XTTS result: {xtts_result}")
 
     # Step 5: Visual Lip Sync (MuseTalk)
     notify_step(5)

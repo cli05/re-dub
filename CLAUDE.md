@@ -51,7 +51,7 @@ Five Modal apps, each an independent serverless deployment:
 |---|---|---|---|
 | `app_whisper.py` | `redub-whisper` | A10G | Transcribes video with Whisper large-v3; returns segments with timestamps |
 | `app_translate.py` | `redub-translate` | CPU | Calls GPT-4o to translate segments; preserves start/end timestamps |
-| `app_xtts.py` | `redub-xtts` | A10G | XTTS v2 zero-shot voice cloning; takes text + 6-sec WAV reference → returns WAV bytes |
+| `app_xtts.py` | `redub-xtts` | H100 | XTTS v2 zero-shot voice cloning; generates **per-segment** audio, time-stretches each clip to match original segment duration, stitches with silence gaps into `dubbed_audio.wav` |
 | `app_latentsync.py` | `redub-latentsync` | **A100 required** | LatentSync diffusion lip-sync; takes video URL + dubbed audio bytes → returns final MP4 bytes |
 | `orchestrator.py` | `redub-orchestrator` | CPU | Calls the 4 apps above via `modal.Function.from_name()`, uploads result to S3-compatible storage, fires a webhook to FastAPI |
 
@@ -80,7 +80,8 @@ All components use **inline `styles` objects** (not Tailwind classes) despite Ta
 ## Key Implementation Notes
 
 - **LatentSync requires A100** — it will OOM on T4/A10G. Do not change the GPU spec.
-- The XTTS language code must be a 2-letter ISO code (e.g., `"es"`, `"fr"`), not a full language name. The orchestrator currently does a naive `target_language[:2].lower()` conversion — this needs a proper mapping.
+- The XTTS language code must be a 2-letter ISO code (e.g., `"es"`, `"fr"`), not a full language name. The `generate_dubbed_audio` function does `target_language[:2].lower()` internally — this needs a proper mapping.
+- **Per-segment TTS with duration matching**: `app_xtts.py` generates audio for each translated segment individually, then uses ffmpeg `atempo` to time-stretch each clip to match the original segment's duration (`end - start`). Silence is inserted between segments to preserve the original pacing. Tempo is clamped to `[0.5, 1.8]` to avoid unnatural audio. The function signature is `generate_dubbed_audio(job_id, segments, target_language)` where `segments` is a list of dicts with `translated_text`, `start`, and `end` keys.
 - `word_timestamps=True` in Whisper is critical; downstream steps depend on per-segment timing.
 - The `backend/translator/` directory is a local Python virtualenv — do not commit it.
 - **Modal secret name discrepancy:** `app_translate.py` references `openai-secret` but CLAUDE.md documents it as `openai-api-secret`. The actual secret in Modal must match what the code uses (`openai-secret`).
