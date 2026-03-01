@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getUser, logout, isAuthenticated } from '../auth';
 
-export default function Header({ hideSearch = false }) {
+export default function Header({ hideSearch = false, hideNewDub = false, hideDropdown = false, searchQuery = "", onSearchChange }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const onNewDub = location.pathname.startsWith('/new-dub');
   const user = getUser();
   const initials = user
     ? user.display_name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
@@ -37,38 +39,47 @@ export default function Header({ hideSearch = false }) {
             <circle cx="11" cy="11" r="8" stroke="white" strokeWidth="2"/>
             <path d="m21 21-4.35-4.35" stroke="white" strokeWidth="2" strokeLinecap="round"/>
           </svg>
-          <input placeholder="Search projects..." style={styles.search} />
+          <input
+            placeholder="Search projects..."
+            style={styles.search}
+            value={searchQuery}
+            onChange={e => onSearchChange?.(e.target.value)}
+          />
         </div>}
       </div>
       <div style={styles.headerRight}>
-        <button style={styles.newDubBtn} onClick={() => navigate('/new-dub')}>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
-          <span>New Dub</span>
-        </button>
-        <div style={styles.avatarWrap} ref={dropdownRef}>
-          <div style={styles.avatar} onClick={() => setDropdownOpen(v => !v)}>
-            <div style={styles.avatarCircle}>{initials}</div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M6 9l6 6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          {dropdownOpen && (
-            <div style={styles.dropdown}>
-              <button
-                style={styles.dropdownItem}
-                onClick={() => { setDropdownOpen(false); navigate('/account-settings'); }}
-              >
-                Account Settings
-              </button>
-              <button
-                style={{ ...styles.dropdownItem, ...styles.dropdownItemLogout }}
-                onClick={() => { logout(); navigate('/login'); }}
-              >
-                Log Out
-              </button>
+        {!hideNewDub && !onNewDub && (
+          <button style={styles.newDubBtn} onClick={() => navigate('/new-dub')}>
+            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
+            <span>New Dub</span>
+          </button>
+        )}
+        {!hideDropdown && (
+          <div style={styles.avatarWrap} ref={dropdownRef}>
+            <div style={styles.avatar} onClick={() => setDropdownOpen(v => !v)}>
+              <div style={styles.avatarCircle}>{initials}</div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M6 9l6 6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
             </div>
-          )}
-        </div>
+            {dropdownOpen && (
+              <div style={styles.dropdown}>
+                <button
+                  style={styles.dropdownItem}
+                  onClick={() => { setDropdownOpen(false); navigate('/account-settings'); }}
+                >
+                  Account Settings
+                </button>
+                <button
+                  style={{ ...styles.dropdownItem, ...styles.dropdownItemLogout }}
+                  onClick={() => { logout(); navigate('/login'); }}
+                >
+                  Log Out
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

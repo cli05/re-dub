@@ -24,6 +24,7 @@ export default function PolyGlotDubs() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("grid");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     authFetch("/api/projects")
@@ -35,9 +36,19 @@ export default function PolyGlotDubs() {
       .catch(() => setLoading(false));
   }, []);
 
+  const q = searchQuery.trim().toLowerCase();
+  const filtered = q
+    ? projects.filter(p =>
+        p.project_name?.toLowerCase().includes(q) ||
+        p.job_id?.toLowerCase().includes(q) ||
+        p.target_language?.toLowerCase().includes(q) ||
+        (STATUS[p.status]?.label ?? p.status).toLowerCase().includes(q)
+      )
+    : projects;
+
   function handleCardClick(p) {
     if (p.status === "COMPLETED") {
-      navigate("/preview", { state: { downloadUrl: p.download_url, job_id: p.job_id, target_language: p.target_language } });
+      navigate("/preview", { state: { downloadUrl: p.download_url, job_id: p.job_id, target_language: p.target_language, project_name: p.project_name } });
     } else if (p.status === "PROCESSING" || p.status === "PENDING") {
       navigate("/loading", { state: { job_id: p.job_id } });
     }
@@ -45,7 +56,7 @@ export default function PolyGlotDubs() {
 
   return (
     <div style={styles.app}>
-      <Header />
+      <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       <main style={styles.main}>
         {/* Controls */}
@@ -81,9 +92,11 @@ export default function PolyGlotDubs() {
           <p style={styles.emptyText}>Loading projects…</p>
         ) : projects.length === 0 ? (
           <p style={styles.emptyText}>No projects yet — start a New Dub.</p>
+        ) : filtered.length === 0 ? (
+          <p style={styles.emptyText}>No projects match "{searchQuery}".</p>
         ) : (
           <div style={view === "grid" ? styles.grid : styles.listView}>
-            {projects.map(p => (
+            {filtered.map(p => (
               <ProjectCard key={p.job_id} project={p} onClick={() => handleCardClick(p)} />
             ))}
           </div>
@@ -106,6 +119,14 @@ function ProjectCard({ project: p, onClick }) {
       <div style={styles.thumb}>
         {p.status === "COMPLETED" ? (
           <div style={styles.playThumb}>
+            <video
+              src={p.download_url}
+              muted
+              preload="metadata"
+              style={styles.thumbImg}
+              onLoadedMetadata={e => { e.target.currentTime = 1; }}
+            />
+            <div style={styles.thumbOverlay} />
             <div style={styles.playBtn}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                 <path d="M8 5v14l11-7z"/>
@@ -135,7 +156,7 @@ function ProjectCard({ project: p, onClick }) {
       {/* Info */}
       <div style={styles.cardBody}>
         <div style={styles.cardRow}>
-          <span style={styles.cardTitle}>{p.job_id}</span>
+          <span style={styles.cardTitle}>{p.project_name || p.job_id}</span>
           <span style={{ ...styles.statusBadge, color: st.color, borderColor: `${st.color}33`, background: `${st.color}11` }}>
             <span style={{ ...styles.statusDotSmall, background: st.dot }} />
             {st.label}
@@ -264,20 +285,34 @@ const styles = {
   playThumb: {
     width: "100%",
     height: "100%",
+    position: "relative",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "linear-gradient(135deg, #0d2420 0%, #1a3530 100%)",
+  },
+  thumbImg: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+  thumbOverlay: {
+    position: "absolute",
+    inset: 0,
+    background: "rgba(0,0,0,0.35)",
   },
   playBtn: {
+    position: "relative",
     width: 48,
     height: 48,
     borderRadius: "50%",
-    background: "rgba(255,255,255,0.15)",
+    background: "rgba(0,229,160,0.85)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     backdropFilter: "blur(4px)",
+    boxShadow: "0 0 20px rgba(0,229,160,0.4)",
   },
   processingThumb: {
     width: "100%",

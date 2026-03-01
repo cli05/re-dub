@@ -6,12 +6,15 @@ import { authFetch } from "../auth";
 export default function VideoPreview() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { downloadUrl, job_id, target_language } = location.state ?? {};
+  const { downloadUrl, job_id, target_language, project_name } = location.state ?? {};
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [downloading, setDownloading] = useState(false);
+  const [name, setName] = useState(project_name || job_id || "Dubbed Video");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
 
   function handleTogglePlay() {
     if (videoRef.current) {
@@ -42,6 +45,24 @@ export default function VideoPreview() {
     }
   }
 
+  function startEdit() { setDraft(name); setEditing(true); }
+
+  async function commitEdit() {
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === name) { setEditing(false); return; }
+    try {
+      const res = await authFetch(`/api/dub/${job_id}/name`, {
+        method: "PATCH",
+        body: JSON.stringify({ project_name: trimmed }),
+      });
+      if (res.ok) setName(trimmed);
+    } finally {
+      setEditing(false);
+    }
+  }
+
+  function cancelEdit() { setEditing(false); }
+
   return (
     <div style={styles.app}>
       <Header hideSearch={true} />
@@ -57,8 +78,28 @@ export default function VideoPreview() {
 
         {/* Page title row */}
         <div style={styles.titleRow}>
-          <div>
-            <h1 style={styles.title}>{job_id ?? "Dubbed Video"}</h1>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {editing ? (
+              <input
+                autoFocus
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={e => {
+                  if (e.key === "Enter") commitEdit();
+                  if (e.key === "Escape") cancelEdit();
+                }}
+                style={styles.titleInput}
+              />
+            ) : (
+              <h1 style={styles.title} onClick={startEdit}>
+                {name}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={styles.editIcon}>
+                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </h1>
+            )}
             <div style={styles.metaRow}>
               <span style={styles.langBadge}>{target_language?.toUpperCase() ?? "—"}</span>
               {duration > 0 && <span style={styles.duration}>• {formatTime(duration)}</span>}
@@ -233,6 +274,31 @@ const styles = {
     fontWeight: 800,
     margin: "0 0 8px",
     letterSpacing: "-0.6px",
+    display: "flex",
+    alignItems: "center",
+    cursor: "pointer",
+  },
+  titleInput: {
+    fontSize: 26,
+    fontWeight: 800,
+    letterSpacing: "-0.6px",
+    background: "rgba(0,229,160,0.05)",
+    border: "1px solid rgba(0,229,160,0.4)",
+    borderRadius: 8,
+    color: "#fff",
+    padding: "2px 10px",
+    outline: "none",
+    fontFamily: "inherit",
+    width: "100%",
+    boxSizing: "border-box",
+    marginBottom: 8,
+  },
+  editIcon: {
+    marginLeft: 10,
+    opacity: 0.55,
+    verticalAlign: "middle",
+    cursor: "pointer",
+    flexShrink: 0,
   },
   metaRow: {
     display: "flex",
