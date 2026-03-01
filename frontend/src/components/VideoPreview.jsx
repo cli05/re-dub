@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import Header from "./Header";
 
 const EXPORT_OPTIONS = [
@@ -60,12 +60,30 @@ function Toggle({ enabled, onToggle }) {
 
 export default function VideoPreview() {
   const navigate = useNavigate();
-  const [isPlaying, setIsPlaying] = useState(true);
+  const location = useLocation();
+  const downloadUrl = location.state?.downloadUrl;
+  const videoRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [subtitlesOn, setSubtitlesOn] = useState(true);
   const [privacy, setPrivacy] = useState("public"); // "public" | "password"
   const [copied, setCopied] = useState(false);
 
   const shareUrl = "https://polyglot.ai/v/mk-v1-92k3";
+
+  function handleTogglePlay() {
+    if (videoRef.current) {
+      isPlaying ? videoRef.current.pause() : videoRef.current.play();
+    }
+    setIsPlaying(p => !p);
+  }
+
+  function formatTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60).toString().padStart(2, '0');
+    return `${m}:${sec}`;
+  }
 
   function handleCopy() {
     navigator.clipboard?.writeText(shareUrl).catch(() => {});
@@ -102,15 +120,27 @@ export default function VideoPreview() {
           {/* Thumbnail area */}
           <div
             style={styles.videoArea}
-            onClick={() => setIsPlaying(p => !p)}
+            onClick={handleTogglePlay}
           >
-            <img
-              src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=900&h=400&fit=crop"
-              alt="Video thumbnail"
-              style={styles.thumbnail}
-            />
+            {downloadUrl ? (
+              <video
+                ref={videoRef}
+                src={downloadUrl}
+                style={styles.thumbnail}
+                playsInline
+                onEnded={() => setIsPlaying(false)}
+                onTimeUpdate={() => setCurrentTime(videoRef.current.currentTime)}
+                onLoadedMetadata={() => setDuration(videoRef.current.duration)}
+              />
+            ) : (
+              <img
+                src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=900&h=400&fit=crop"
+                alt="Video thumbnail"
+                style={styles.thumbnail}
+              />
+            )}
             {/* Dim overlay */}
-            <div style={styles.videoDim} />
+            <div style={{ ...styles.videoDim, opacity: isPlaying ? 0 : 1 }} />
 
             {/* Play/pause button */}
             <button style={styles.bigPlayBtn}>
@@ -130,15 +160,23 @@ export default function VideoPreview() {
           {/* Scrubber */}
           <div style={styles.scrubWrap}>
             <div style={styles.scrubTrack}>
-              <div style={styles.scrubFill} />
-              <div style={styles.scrubThumb} />
+              <div style={{ ...styles.scrubFill, width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
+              <input
+                type="range"
+                min={0}
+                max={duration || 1}
+                step={0.1}
+                value={currentTime}
+                onChange={e => { videoRef.current.currentTime = parseFloat(e.target.value); }}
+                style={styles.scrubInput}
+              />
             </div>
           </div>
 
           {/* Controls bar */}
           <div style={styles.controlsBar}>
             <div style={styles.ctrlLeft}>
-              <button style={styles.ctrlBtn} onClick={() => setIsPlaying(p => !p)}>
+              <button style={styles.ctrlBtn} onClick={handleTogglePlay}>
                 {isPlaying ? (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                     <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>
@@ -156,7 +194,7 @@ export default function VideoPreview() {
                   <path d="M15.54 8.46a5 5 0 010 7.07" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
               </button>
-              <span style={styles.timeCode}>01:24 / 04:20</span>
+              <span style={styles.timeCode}>{formatTime(currentTime)} / {formatTime(duration)}</span>
             </div>
             <div style={styles.ctrlRight}>
               <button style={styles.ctrlBtn}>
@@ -420,21 +458,17 @@ const styles = {
     cursor: "pointer",
   },
   scrubFill: {
-    width: "33%",
     height: "100%",
     background: "#00e5a0",
     borderRadius: 2,
   },
-  scrubThumb: {
+  scrubInput: {
     position: "absolute",
-    top: "50%",
-    left: "33%",
-    transform: "translate(-50%, -50%)",
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    background: "#fff",
-    boxShadow: "0 0 6px rgba(0,229,160,0.7)",
+    inset: 0,
+    width: "100%",
+    opacity: 0,
+    cursor: "pointer",
+    margin: 0,
   },
   controlsBar: {
     display: "flex",
