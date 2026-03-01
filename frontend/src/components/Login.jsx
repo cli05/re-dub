@@ -56,7 +56,7 @@ export default function Login() {
 
         <div style={s.card}>
           <h1 style={s.title}>Log In</h1>
-          <p style={s.subtitle}>Welcome back to PolyGlot Dubs.</p>
+          <p style={s.subtitle}>Welcome back to Redub.</p>
 
           <form onSubmit={handleSubmit} style={s.form}>
             {/* Email */}
@@ -78,7 +78,6 @@ export default function Login() {
             <div style={s.fieldGroup}>
               <div style={s.labelRow}>
                 <label style={s.label}>Password</label>
-                <a href="#" style={s.forgotLink}>Forgot password?</a>
               </div>
               <div style={s.passwordWrap}>
                 <input
@@ -162,7 +161,7 @@ export default function Login() {
             <path d="M3 5h12M9 3v2m4.5 13c0 2.485-2.015 4.5-4.5 4.5S4.5 20.485 4.5 18c0-2.484 2.015-4.5 4.5-4.5s4.5 2.016 4.5 4.5z" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
             <path d="M15 5c0 4-3 7-3 7m5-7c2 3 2 7 2 7" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
           </svg>
-          <span style={s.footerCopy}>© 2024 PolyGlot Dubs</span>
+          <span style={s.footerCopy}>© 2024 Redub</span>
         </div>
         <div style={s.footerLinks}>
           {["Terms of Service", "Privacy Policy", "Contact Support"].map(l => (

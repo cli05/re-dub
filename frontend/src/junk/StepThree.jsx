@@ -185,7 +185,7 @@ export default function NewDubStep3() {
           <span style={styles.statusDot} />
           <span style={styles.footerText}>System Operational</span>
           <span style={{ color: "rgba(255,255,255,0.15)", fontSize: 12 }}>|</span>
-          <span style={styles.footerText}>© 2024 PolyGlot Dubs AI</span>
+          <span style={styles.footerText}>© 2024 Redub</span>
         </div>
       </footer>
     </div>

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getUser, logout } from '../auth';
+import { getUser, logout, isAuthenticated } from '../auth';
 
 export default function Header({ hideSearch = false }) {
   const navigate = useNavigate();
@@ -25,12 +25,12 @@ export default function Header({ hideSearch = false }) {
   return (
     <header style={styles.header}>
       <div style={styles.headerLeft}>
-        <div style={styles.logo} onClick={() => navigate('/dashboard')}>
+        <div style={styles.logo} onClick={() => navigate(isAuthenticated() ? '/dashboard' : '/')}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
             <path d="M3 5h12M9 3v2m4.5 13c0 2.485-2.015 4.5-4.5 4.5S4.5 20.485 4.5 18c0-2.484 2.015-4.5 4.5-4.5s4.5 2.016 4.5 4.5z" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
             <path d="M15 5c0 4-3 7-3 7m5-7c2 3 2 7 2 7" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
           </svg>
-          <span style={styles.logoText}>PolyGlot Dubs</span>
+          <span style={styles.logoText}>Redub</span>
         </div>
         {!hideSearch && <div style={styles.searchWrap}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.4 }}>

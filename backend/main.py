@@ -10,7 +10,7 @@ load_dotenv()
 
 from r2 import upload_file, generate_upload_url, generate_download_url, delete_file, list_files
 from accounts import create_user, get_user_by_email, update_user
-from jobs import create_job, get_job, list_jobs, complete_job, fail_job
+from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step
 from auth import hash_password, verify_password, create_access_token, get_current_user
 
 app = FastAPI()
@@ -205,7 +205,7 @@ async def get_dub_status(
     job = await get_job(job_id, current_user["user_id"])
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    response = {"job_id": job_id, "status": job["status"]}
+    response = {"job_id": job_id, "status": job["status"], "step": job.get("step", 0)}
     if job["status"] == "COMPLETED":
         response["output_key"] = job["output_key"]
         response["download_url"] = generate_download_url(job["output_key"])
@@ -224,6 +224,24 @@ async def list_projects(current_user: dict = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 # Webhook — called by the Modal orchestrator, not by the frontend
 # ---------------------------------------------------------------------------
+
+class StepPayload(BaseModel):
+    job_id: str
+    step: int            # 1=Preparing, 2=Transcribing, 3=Translating, 4=Cloning Voice, 5=Lip Syncing
+
+
+@app.post("/api/webhook/job-step")
+async def job_step_webhook(
+    payload: StepPayload,
+    authorization: str = Header(None),
+):
+    """Receive per-step progress from the Modal orchestrator."""
+    secret = os.getenv("WEBHOOK_SECRET")
+    if secret and authorization != f"Bearer {secret}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    await update_job_step(payload.job_id, payload.step)
+    return {"received": True}
+
 
 class WebhookPayload(BaseModel):
     job_id: str

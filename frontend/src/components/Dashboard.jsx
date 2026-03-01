@@ -181,7 +181,7 @@ export default function PolyGlotDubs() {
           <span style={styles.statusDot} />
           <span style={styles.footerText}>System Operational</span>
           <span style={styles.footerDivider}>|</span>
-          <span style={styles.footerText}>© 2024 PolyGlot Dubs AI</span>
+          <span style={styles.footerText}>© 2024 Redub</span>
         </div>
       </footer>
     </div>
