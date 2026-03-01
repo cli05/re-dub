@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "./Header";
 import { getToken, authFetch } from "../auth";
@@ -68,8 +68,17 @@ export default function NewDub() {
   const [attempted, setAttempted] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  const [voicePresets, setVoicePresets] = useState([]);
+  const [selectedPreset, setSelectedPreset] = useState(null); // null = use original voice
   const inputRef = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    authFetch("/api/presets")
+      .then(r => r.ok ? r.json() : { presets: [] })
+      .then(data => setVoicePresets((data.presets || []).filter(p => p.status === "READY")))
+      .catch(() => {});
+  }, []);
 
   const canSubmit = !!file;
 
@@ -90,13 +99,16 @@ export default function NewDub() {
       const { file_key } = await uploadRes.json();
 
       // 2. Create dubbing job
+      const dubBody = {
+        file_key,
+        project_id: crypto.randomUUID().slice(0, 8),
+        target_language: selectedLang.code,
+      };
+      if (selectedPreset) dubBody.voice_preset_id = selectedPreset;
+
       const dubRes = await authFetch("/api/dub", {
         method: "POST",
-        body: JSON.stringify({
-          file_key,
-          project_id: crypto.randomUUID().slice(0, 8),
-          target_language: selectedLang.code,
-        }),
+        body: JSON.stringify(dubBody),
       });
       if (!dubRes.ok) throw new Error("Failed to start dubbing job");
       const { job_id } = await dubRes.json();
@@ -281,6 +293,47 @@ export default function NewDub() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Voice Preset selector */}
+          {voicePresets.length > 0 && (
+            <>
+              <div style={styles.divider} />
+              <p style={styles.sectionLabel}>Voice preset (optional)</p>
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", margin: "-4px 0 12px", lineHeight: 1.5 }}>
+                Use a fine-tuned voice model for higher quality dubbing, or keep the default to clone directly from the video.
+              </p>
+              <div style={styles.presetRow}>
+                <button
+                  onClick={() => setSelectedPreset(null)}
+                  style={{
+                    ...styles.presetChip,
+                    ...(selectedPreset === null ? styles.presetChipActive : {}),
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  Default (from video)
+                </button>
+                {voicePresets.map(p => (
+                  <button
+                    key={p.voice_preset_id}
+                    onClick={() => setSelectedPreset(p.voice_preset_id)}
+                    style={{
+                      ...styles.presetChip,
+                      ...(selectedPreset === p.voice_preset_id ? styles.presetChipActive : {}),
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                      <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M19 10v2a7 7 0 01-14 0v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
 
           {uploadError && (
@@ -567,6 +620,30 @@ const styles = {
     transition: "all 0.18s",
   },
   dialectChipActive: {
+    background: "rgba(0,229,160,0.12)",
+    border: "1px solid #00e5a0",
+    color: "#00e5a0",
+  },
+  presetRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  presetChip: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: "transparent",
+    border: "1px solid rgba(255,255,255,0.15)",
+    borderRadius: 20,
+    padding: "7px 16px",
+    fontSize: 13,
+    color: "rgba(255,255,255,0.55)",
+    cursor: "pointer",
+    transition: "all 0.18s",
+    fontFamily: "inherit",
+  },
+  presetChipActive: {
     background: "rgba(0,229,160,0.12)",
     border: "1px solid #00e5a0",
     color: "#00e5a0",

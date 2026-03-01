@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Header from "./Header";
-import { getUser, authFetch } from "../auth";
+import { getUser, authFetch, getToken } from "../auth";
+
+const API_BASE = "http://127.0.0.1:8000";
 
 const LANGUAGES = [
   "Spanish (Español)",
@@ -51,6 +53,86 @@ export default function AccountSettings() {
   const [saved, setSaved] = useState(false);
   const [apiError, setApiError] = useState("");
   const [focusedField, setFocusedField] = useState(null);
+
+  // Voice Presets
+  const [presets, setPresets] = useState([]);
+  const [presetName, setPresetName] = useState("");
+  const [presetFile, setPresetFile] = useState(null);
+  const [presetUploading, setPresetUploading] = useState(false);
+  const [presetError, setPresetError] = useState("");
+  const presetInputRef = useRef(null);
+
+  useEffect(() => {
+    loadPresets();
+  }, []);
+
+  async function loadPresets() {
+    try {
+      const res = await authFetch("/api/presets");
+      if (res.ok) {
+        const data = await res.json();
+        setPresets(data.presets || []);
+      }
+    } catch {}
+  }
+
+  async function handleCreatePreset() {
+    if (!presetFile || !presetName.trim()) return;
+    setPresetUploading(true);
+    setPresetError("");
+    try {
+      // 1. Upload audio file to R2
+      const formData = new FormData();
+      formData.append("file", presetFile);
+      const uploadRes = await fetch(`${API_BASE}/api/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error("Audio upload failed");
+      const { file_key } = await uploadRes.json();
+
+      // 2. Get audio duration
+      const duration = await new Promise((resolve) => {
+        const audio = new Audio(URL.createObjectURL(presetFile));
+        audio.addEventListener("loadedmetadata", () => resolve(audio.duration));
+        audio.addEventListener("error", () => resolve(0));
+      });
+
+      if (duration < 30) {
+        throw new Error("Audio must be at least 30 seconds long.");
+      }
+
+      // 3. Create the preset (triggers fine-tuning)
+      const res = await authFetch("/api/presets", {
+        method: "POST",
+        body: JSON.stringify({
+          name: presetName.trim(),
+          audio_key: file_key,
+          duration_sec: duration,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to create preset");
+      }
+
+      setPresetName("");
+      setPresetFile(null);
+      await loadPresets();
+    } catch (err) {
+      setPresetError(err.message || "Something went wrong");
+    } finally {
+      setPresetUploading(false);
+    }
+  }
+
+  async function handleDeletePreset(presetId) {
+    try {
+      await authFetch(`/api/presets/${presetId}`, { method: "DELETE" });
+      setPresets(prev => prev.filter(p => p.voice_preset_id !== presetId));
+    } catch {}
+  }
 
   async function handleSave() {
     setApiError("");
@@ -253,6 +335,102 @@ export default function AccountSettings() {
           </Field>
         </SectionCard>
 
+        {/* Voice Presets */}
+        <SectionCard
+          icon={
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" stroke="#00e5a0" strokeWidth="2"/>
+              <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" stroke="#00e5a0" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          }
+          title="Voice Presets"
+        >
+          <p style={s.fieldHint}>
+            Upload a clear audio sample (≥30 seconds) of the target voice. Our AI will fine-tune a custom voice model for higher-quality dubbing.
+          </p>
+
+          {/* Existing presets list */}
+          {presets.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+              {presets.map(p => (
+                <div key={p.voice_preset_id} style={s.presetRow}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                      background: p.status === "READY" ? "#00e5a0" : p.status === "FAILED" ? "#ff4d6d" : "#f0ad4e",
+                      boxShadow: p.status === "READY" ? "0 0 6px #00e5a0" : "none",
+                    }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.name}
+                    </span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", flexShrink: 0 }}>
+                      {p.status === "READY" ? "Ready" : p.status === "FAILED" ? "Failed" : "Processing…"}
+                    </span>
+                    {p.duration_sec && (
+                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", flexShrink: 0 }}>
+                        {Math.round(p.duration_sec)}s
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleDeletePreset(p.voice_preset_id)}
+                    style={s.presetDeleteBtn}
+                    title="Delete preset"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Create new preset form */}
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <label style={s.fieldLabel}>Preset Name</label>
+              <input
+                value={presetName}
+                onChange={e => setPresetName(e.target.value)}
+                placeholder="e.g. My Voice"
+                style={{ ...s.input, marginTop: 6, borderColor: "rgba(255,255,255,0.09)", background: "rgba(255,255,255,0.04)", boxShadow: "none" }}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <label style={s.fieldLabel}>Audio File</label>
+              <input
+                ref={presetInputRef}
+                type="file"
+                accept="audio/*"
+                style={{ display: "none" }}
+                onChange={e => { if (e.target.files[0]) setPresetFile(e.target.files[0]); }}
+              />
+              <button
+                onClick={() => presetInputRef.current?.click()}
+                style={{ ...s.input, marginTop: 6, cursor: "pointer", borderColor: "rgba(255,255,255,0.09)", background: "rgba(255,255,255,0.04)", boxShadow: "none", textAlign: "left", color: presetFile ? "#fff" : "rgba(255,255,255,0.35)" }}
+              >
+                {presetFile ? presetFile.name : "Choose audio file…"}
+              </button>
+            </div>
+            <button
+              onClick={handleCreatePreset}
+              disabled={presetUploading || !presetFile || !presetName.trim()}
+              style={{
+                ...s.saveBtn,
+                padding: "10px 18px",
+                fontSize: 12,
+                opacity: (presetUploading || !presetFile || !presetName.trim()) ? 0.4 : 1,
+                cursor: (presetUploading || !presetFile || !presetName.trim()) ? "not-allowed" : "pointer",
+                boxShadow: "none",
+              }}
+            >
+              {presetUploading ? "Uploading…" : "Create Preset"}
+            </button>
+          </div>
+          {presetError && <p style={s.errorMsg}>{presetError}</p>}
+        </SectionCard>
+
         {/* Action buttons */}
         {apiError && <p style={{ color: "#ff4d6d", fontSize: 12, textAlign: "right", margin: "0 0 8px" }}>{apiError}</p>}
         <div style={s.actions}>
@@ -448,6 +626,27 @@ const s = {
     fontSize: 11,
     color: "#ff4d6d",
     marginTop: 4,
+  },
+  presetRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "10px 14px",
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.07)",
+    borderRadius: 10,
+  },
+  presetDeleteBtn: {
+    background: "transparent",
+    border: "none",
+    color: "rgba(255,255,255,0.3)",
+    cursor: "pointer",
+    padding: 4,
+    borderRadius: 6,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "color 0.15s",
   },
   selectWrap: {
     position: "relative",

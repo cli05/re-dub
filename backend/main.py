@@ -13,7 +13,6 @@ from accounts import create_user, get_user_by_email, update_user
 from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step
 from presets import create_preset, get_preset, list_presets, complete_preset, fail_preset, delete_preset
 from auth import hash_password, verify_password, create_access_token, get_current_user
-from presets import create_preset, get_preset, list_presets, complete_preset, fail_preset, delete_preset
 
 app = FastAPI()
 
