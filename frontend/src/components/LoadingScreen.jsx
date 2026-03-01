@@ -48,7 +48,7 @@ export default function LoadingScreen() {
           clearInterval(intervalRef.current);
           setCurrentStep(STEPS.length - 1);
           setDone(true);
-          setTimeout(() => navigate("/preview", { state: { downloadUrl: data.download_url } }), 1000);
+          setTimeout(() => navigate("/preview", { state: { downloadUrl: data.download_url, job_id: jobId, target_language: data.target_language } }), 1000);
           return;
         }
 
@@ -76,7 +76,7 @@ export default function LoadingScreen() {
   return (
     <div style={styles.page}>
       {/* Wordmark */}
-      <div style={styles.wordmark}>
+      <button onClick={() => navigate('/dashboard')} style={styles.wordmarkBtn}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
           <path
             d="M3 5h12M9 3v2m4.5 13c0 2.485-2.015 4.5-4.5 4.5S4.5 20.485 4.5 18c0-2.484 2.015-4.5 4.5-4.5s4.5 2.016 4.5 4.5z"
@@ -88,7 +88,7 @@ export default function LoadingScreen() {
           />
         </svg>
         <span style={styles.wordmarkText}>Redub</span>
-      </div>
+      </button>
 
       <div style={styles.content}>
         {/* Spinner / check icon */}
@@ -154,74 +154,6 @@ export default function LoadingScreen() {
             : STEPS[currentStep].detail}
         </p>
 
-        {/* Progress bar */}
-        {!failed && (
-          <div style={styles.barWrap}>
-            <div style={styles.track}>
-              <div style={{ ...styles.fill, width: `${overallProgress}%` }} />
-
-              {STEPS.map((_, i) => {
-                const pos = ((i + 1) / STEPS.length) * 100;
-                const reached = overallProgress >= pos - 0.5;
-                const active = currentStep === i && !done;
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      ...styles.dot,
-                      left: `${pos}%`,
-                      background: reached
-                        ? "#00e5a0"
-                        : active
-                        ? "rgba(0,229,160,0.35)"
-                        : "#0d2420",
-                      borderColor: reached
-                        ? "#00e5a0"
-                        : active
-                        ? "rgba(0,229,160,0.5)"
-                        : "rgba(255,255,255,0.15)",
-                      boxShadow: reached ? "0 0 10px rgba(0,229,160,0.45)" : "none",
-                    }}
-                  />
-                );
-              })}
-            </div>
-
-            <div style={styles.labelRow}>
-              {STEPS.map((step, i) => {
-                const pos = ((i + 1) / STEPS.length) * 100;
-                const reached = overallProgress >= pos - 0.5;
-                const active = currentStep === i && !done;
-                return (
-                  <span
-                    key={i}
-                    style={{
-                      ...styles.stepLabel,
-                      left: `${pos}%`,
-                      color: reached
-                        ? "#00e5a0"
-                        : active
-                        ? "rgba(255,255,255,0.8)"
-                        : "rgba(255,255,255,0.28)",
-                      fontWeight: active ? 600 : 400,
-                    }}
-                  >
-                    {step.label}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {!failed && (
-          <p style={styles.stepCounter}>
-            {done
-              ? `${STEPS.length} of ${STEPS.length} steps complete`
-              : `Step ${currentStep + 1} of ${STEPS.length}`}
-          </p>
-        )}
-
         {failed && (
           <button style={styles.retryBtn} onClick={() => navigate("/new-dub")}>
             Try Again
@@ -250,13 +182,17 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
   },
-  wordmark: {
+  wordmarkBtn: {
     position: "absolute",
     top: 24,
     left: 28,
     display: "flex",
     alignItems: "center",
     gap: 8,
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: 0,
   },
   wordmarkText: {
     fontSize: 16,
@@ -296,7 +232,7 @@ const styles = {
   },
   subtitle: {
     fontSize: 13,
-    margin: "0 0 44px",
+    margin: "0 0 24px",
     textAlign: "center",
   },
   barWrap: {
@@ -308,7 +244,6 @@ const styles = {
     height: 6,
     background: "rgba(255,255,255,0.07)",
     borderRadius: 99,
-    marginBottom: 30,
   },
   fill: {
     position: "absolute",
@@ -318,30 +253,6 @@ const styles = {
     background: "linear-gradient(90deg, #00e5a0, #4fc3f7)",
     borderRadius: 99,
     transition: "width 0.4s ease",
-  },
-  dot: {
-    position: "absolute",
-    top: "50%",
-    width: 14,
-    height: 14,
-    borderRadius: "50%",
-    border: "2px solid",
-    transform: "translate(-50%, -50%)",
-    transition: "all 0.35s",
-    zIndex: 2,
-  },
-  labelRow: {
-    position: "relative",
-    height: 18,
-  },
-  stepLabel: {
-    position: "absolute",
-    top: 0,
-    fontSize: 11,
-    transform: "translateX(-50%)",
-    whiteSpace: "nowrap",
-    transition: "color 0.35s",
-    letterSpacing: "0.2px",
   },
   stepCounter: {
     fontSize: 12,

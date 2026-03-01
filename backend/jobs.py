@@ -81,3 +81,10 @@ async def fail_job(job_id: str, error: str):
         "UPDATE jobs SET status = 'FAILED', error = ?, completed_at = ? WHERE job_id = ?",
         [error, now, job_id],
     )
+
+
+async def rename_job(job_id: str, project_name: str):
+    await execute(
+        "UPDATE jobs SET project_name = ? WHERE job_id = ?",
+        [project_name, job_id],
+    )

@@ -4,20 +4,6 @@ import { getUser, authFetch, getToken } from "../auth";
 
 const API_BASE = "http://127.0.0.1:8000";
 
-const LANGUAGES = [
-  "Spanish (Español)",
-  "French (Français)",
-  "Mandarin (普通话)",
-  "Hindi (हिन्दी)",
-  "Arabic (العربية)",
-  "Portuguese (Português)",
-  "German (Deutsch)",
-  "Japanese (日本語)",
-  "Korean (한국어)",
-  "Italian (Italiano)",
-  "Russian (Русский)",
-  "Turkish (Türkçe)",
-];
 
 function SectionCard({ icon, title, children }) {
   return (
@@ -47,9 +33,6 @@ export default function AccountSettings() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [language, setLanguage] = useState(
-    storedUser?.preferences?.preferred_language ?? "Spanish (Español)"
-  );
   const [saved, setSaved] = useState(false);
   const [apiError, setApiError] = useState("");
   const [focusedField, setFocusedField] = useState(null);
@@ -155,7 +138,6 @@ export default function AccountSettings() {
         method: "PATCH",
         body: JSON.stringify({
           display_name: fullName,
-          preferences: { preferred_language: language },
         }),
       });
       if (!profileRes.ok) {
@@ -193,7 +175,6 @@ export default function AccountSettings() {
   function handleDiscard() {
     const u = getUser();
     setFullName(u?.display_name ?? "");
-    setLanguage(u?.preferences?.preferred_language ?? "Spanish (Español)");
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
@@ -602,12 +583,6 @@ const s = {
     fontSize: 12,
     color: "rgba(255,255,255,0.5)",
     fontWeight: 500,
-  },
-  fieldHint: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.32)",
-    margin: "-3px 0 6px",
-    lineHeight: 1.5,
   },
   input: {
     background: "rgba(255,255,255,0.04)",

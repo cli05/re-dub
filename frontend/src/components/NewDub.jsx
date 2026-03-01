@@ -363,15 +363,7 @@ export default function NewDub() {
       </main>
 
       <footer style={styles.footer}>
-        <div style={{ display: "flex", gap: 24 }}>
-          {["View Docs", "Terms of Service", "Support"].map(l => (
-            <a key={l} href="#" style={styles.footerLink}>{l}</a>
-          ))}
-        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={styles.statusDot} />
-          <span style={styles.footerText}>System Operational</span>
-          <span style={{ color: "rgba(255,255,255,0.15)", fontSize: 12 }}>|</span>
           <span style={styles.footerText}>© 2024 Redub</span>
         </div>
       </footer>

@@ -15,11 +15,16 @@ CREATE TABLE IF NOT EXISTS jobs (
     source_key      TEXT,
     output_key      TEXT,
     target_language TEXT,
+    project_name    TEXT,
     created_at      TEXT NOT NULL,
     completed_at    TEXT,
     error           TEXT,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
+
+-- Migration for existing databases:
+-- ALTER TABLE jobs ADD COLUMN step INTEGER NOT NULL DEFAULT 0;
+-- ALTER TABLE jobs ADD COLUMN project_name TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
 

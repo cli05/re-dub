@@ -10,8 +10,10 @@ load_dotenv()
 
 from r2 import upload_file, generate_upload_url, generate_download_url, delete_file, list_files, object_exists, get_object_json
 from accounts import create_user, get_user_by_email, update_user
-from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step
+
+from jobs import create_job, get_job, list_jobs, complete_job, fail_job, update_job_step, rename_job
 from presets import create_preset, get_preset, list_presets, complete_preset, fail_preset, delete_preset
+
 from auth import hash_password, verify_password, create_access_token, get_current_user
 
 app = FastAPI()
@@ -217,13 +219,41 @@ async def get_dub_status(
             job["status"] = "COMPLETED"
             job["output_key"] = output_key
 
-    response = {"job_id": job_id, "status": job["status"], "step": job.get("step", 0)}
+    response = {
+        "job_id": job_id,
+        "status": job["status"],
+        "step": job.get("step", 0),
+        "target_language": job.get("target_language", ""),
+    }
     if job["status"] == "COMPLETED":
         response["output_key"] = job["output_key"]
         response["download_url"] = generate_download_url(job["output_key"])
     elif job["status"] == "FAILED":
         response["error"] = job["error"]
     return response
+
+
+@app.get("/api/dub/{job_id}/download")
+async def get_download_url(job_id: str, current_user: dict = Depends(get_current_user)):
+    """Return a short-lived presigned download URL with Content-Disposition: attachment."""
+    job = await get_job(job_id, current_user["user_id"])
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["status"] != "COMPLETED" or not job.get("output_key"):
+        raise HTTPException(status_code=400, detail="Job output not available")
+    return {"download_url": generate_download_url(job["output_key"], attachment=True)}
+
+
+@app.patch("/api/dub/{job_id}/name")
+async def rename_dub(job_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    job = await get_job(job_id, current_user["user_id"])
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    name = (body.get("project_name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="project_name is required")
+    await rename_job(job_id, name)
+    return {"project_name": name}
 
 
 @app.get("/api/projects")
@@ -233,8 +263,12 @@ async def list_projects(current_user: dict = Depends(get_current_user)):
     result = []
     for job in jobs:
         j = dict(job)
-        if j.get("status") == "COMPLETED" and j.get("output_key"):
-            j["download_url"] = generate_download_url(j["output_key"])
+        if j.get("status") != "COMPLETED" or not j.get("output_key"):
+            continue
+        if not object_exists(j["output_key"]):
+            await fail_job(j["job_id"], "Output file was deleted")
+            continue
+        j["download_url"] = generate_download_url(j["output_key"])
         result.append(j)
     return {"projects": result}
 

@@ -60,7 +60,7 @@ export default function SignUp() {
 
   return (
     <div style={s.app}>
-      <Header hideSearch={true} />
+      <Header hideSearch={true} hideNewDub={true} hideDropdown={true} />
 
       <main style={s.main}>
         {/* Background glow */}
@@ -168,14 +168,6 @@ export default function SignUp() {
                 </span>
               </div>
             )}
-
-            {/* Terms */}
-            <p style={s.terms}>
-              By creating an account, you agree to our{" "}
-              <a href="#" style={s.termsLink}>Terms of Service</a>
-              {" "}and{" "}
-              <a href="#" style={s.termsLink}>Privacy Policy</a>.
-            </p>
 
             {/* Submit */}
             <button
