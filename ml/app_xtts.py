@@ -35,7 +35,7 @@ MAX_TEMPO = 1.8   # fastest (1.8× faster)
 # How much of the time-stretch to actually apply (0.0 = none, 1.0 = full).
 # 0.5 means we meet the original timing halfway — noticeably aligned but
 # still natural-sounding. Go down for less stretching, up for tighter timing alignment
-STRETCH_ALPHA = 0.5
+STRETCH_ALPHA = 0.2
 
 SAMPLE_RATE = 22050  # XTTS v2 output sample rate
 NUM_CHANNELS = 1     # mono

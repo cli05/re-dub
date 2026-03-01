@@ -112,7 +112,7 @@ The ML pipeline runs on [Modal](https://modal.com/) — serverless GPU infrastru
    modal deploy ml/app_whisper.py
    modal deploy ml/app_translate.py
    modal deploy ml/app_xtts.py
-   modal deploy ml/app_latentsync.py
+   modal deploy ml/app_musetalk.py
    modal deploy ml/orchestrator.py
    ```
 
