@@ -1,4 +1,4 @@
-# re-dub (PolyGlot Dubs AI)
+# Re-Dub
 
 An AI-powered video dubbing platform. Upload a video, pick a target language, and get back a dubbed video with cloned voice and synced lips.
 
