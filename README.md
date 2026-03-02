@@ -129,7 +129,7 @@ The ML pipeline runs on [Modal](https://modal.com/) — serverless GPU infrastru
 - **Frontend:** React 18, React Router, Tailwind CSS
 - **Backend:** FastAPI, Uvicorn, Cloudflare D1 (database), Cloudflare R2 (object storage)
 - **Auth:** JWT (python-jose), bcrypt
-- **ML Pipeline:** Modal (serverless GPUs), OpenAI Whisper large-v3, Groq/LLaMA 3.3 70B, Coqui XTTS v2, LatentSync
+- **ML Pipeline:** Modal (serverless GPUs), OpenAI Whisper large-v3, Groq/LLaMA 3.3 70B, Coqui XTTS v2, MuseTalk
 - **Infrastructure:** Modal (A10G, H100, A100 GPUs), Cloudflare Workers ecosystem
 
 ## AI Tools Used
